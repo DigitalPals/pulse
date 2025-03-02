@@ -961,9 +961,7 @@ create_wrapper_script() {
     # Get the full path
     INSTALL_DIR=$(pwd)
     
-    cd pulse
-    
-    # Create the wrapper script to handle PYTHONPATH
+    # Create the wrapper script in the root directory
     cat > pulse << EOF
 #!/bin/bash
 # Wrapper script for Cybex Pulse
@@ -983,7 +981,7 @@ if ! command -v "\$PYTHON_CMD" &> /dev/null; then
 fi
 
 # Add the current directory to the Python path
-export PYTHONPATH="$(pwd):\$PYTHONPATH"
+export PYTHONPATH="${INSTALL_DIR}/pulse:\$PYTHONPATH"
 
 # Fix for externally-managed-environment on newer Python installations
 if [ -z "\${PYTHONPATH_IGNORE_PEP668+x}" ]; then
@@ -1018,7 +1016,7 @@ Wants=network-online.target
 Type=simple
 ExecStart=${INSTALL_DIR}/pulse
 WorkingDirectory=${INSTALL_DIR}
-Environment="PYTHONPATH=${INSTALL_DIR}"
+Environment="PYTHONPATH=${INSTALL_DIR}/pulse:${INSTALL_DIR}"
 Environment="PYTHONPATH_IGNORE_PEP668=1"
 Restart=on-failure
 RestartSec=10
@@ -1191,9 +1189,9 @@ verify_installation() {
     fi
     
     # Check if wrapper script works
-    if [ -d "${INSTALL_DIR}/pulse" ] && [ -f "${INSTALL_DIR}/pulse/pulse" ]; then
+    if [ -f "${INSTALL_DIR}/pulse" ]; then
         log_success "Wrapper script created successfully"
-    elif [ -f "${CURRENT_DIR}/pulse/pulse" ]; then
+    elif [ -f "${CURRENT_DIR}/pulse" ]; then
         log_success "Wrapper script created successfully"
     else
         log_warning "Wrapper script not found at expected location. It might be in a different path."
@@ -1239,7 +1237,7 @@ print_completion() {
     fi
     
     echo -e "\n${GREEN}Usage Instructions:${NC}"
-    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/pulse/pulse"
+    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/pulse"
     
     if command -v systemctl &>/dev/null && [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
         echo -e "  - ${BOLD}Start as a service:${NC} sudo systemctl start cybex-pulse"
