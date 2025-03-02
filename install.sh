@@ -1044,11 +1044,12 @@ verify_module_installation() {
     echo "Verifying Python module installation..." >> $LOG_FILE
     
     echo -ne "${ARROW} ${CYAN}Checking cybex-pulse package...${NC} "
-    if $INSTALL_DIR/venv/bin/pip list | grep -q "cybex-pulse"; then
+    # Use a safer approach to check the package that won't break pipes
+    if $INSTALL_DIR/venv/bin/pip list 2>/dev/null | grep -q "cybex-pulse"; then
         echo -e "${CHECK_MARK} ${GREEN}Installed${NC}"
         echo "SUCCESS: cybex-pulse package is installed" >> $LOG_FILE
         
-        # Get version info
+        # Get version info safely
         PACKAGE_INFO=$($INSTALL_DIR/venv/bin/pip show cybex-pulse 2>/dev/null)
         PACKAGE_VERSION=$(echo "$PACKAGE_INFO" | grep "Version:" | cut -d' ' -f2)
         echo -e "${INFO} ${BLUE}Installed version: $PACKAGE_VERSION${NC}"
@@ -1056,7 +1057,20 @@ verify_module_installation() {
     else
         echo -e "${CROSS_MARK} ${RED}Not found${NC}"
         echo "FAILED: cybex-pulse package is not installed" >> $LOG_FILE
-        warning "Package not found in pip list. The application may not work correctly."
+        
+        # Attempt to fix missing package installation
+        echo -ne "${ARROW} ${CYAN}Attempting to install cybex-pulse package...${NC} "
+        cd $INSTALL_DIR
+        $INSTALL_DIR/venv/bin/pip install -e . >> $LOG_FILE 2>&1
+        
+        if $INSTALL_DIR/venv/bin/pip list 2>/dev/null | grep -q "cybex-pulse"; then
+            echo -e "${CHECK_MARK} ${GREEN}Fixed${NC}"
+            echo "SUCCESS: Installed cybex-pulse package" >> $LOG_FILE
+        else
+            echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+            echo "FAILED: Could not install cybex-pulse package" >> $LOG_FILE
+            warning "Package could not be installed. The application may not work correctly."
+        fi
     fi
     
     # Try to import the module
@@ -1084,10 +1098,45 @@ except Exception as e:
         # Try to fix common installation issues
         echo -ne "${ARROW} ${CYAN}Attempting to fix module installation...${NC} "
         cd $INSTALL_DIR
+        
+        # Ensure all package directories have __init__.py files
+        echo "Creating missing __init__.py files..." >> $LOG_FILE
+        find . -type d -not -path "*/\.*" -not -path "*/venv*" -exec touch {}/__init__.py \; >> $LOG_FILE 2>&1
+        
+        # Fix permissions
+        echo "Setting correct permissions..." >> $LOG_FILE
+        chmod -R 755 $INSTALL_DIR >> $LOG_FILE 2>&1
+        
+        # Reinstall the package
+        echo "Reinstalling package..." >> $LOG_FILE
         $INSTALL_DIR/venv/bin/pip install -e . --no-deps >> $LOG_FILE 2>&1
         
         # Verify PYTHONPATH includes installation directory
-        echo "export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH" >> $INSTALL_DIR/venv/bin/activate
+        echo "Setting PYTHONPATH in virtual environment..." >> $LOG_FILE
+        grep -q "PYTHONPATH=$INSTALL_DIR" $INSTALL_DIR/venv/bin/activate || echo "export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH" >> $INSTALL_DIR/venv/bin/activate
+        source $INSTALL_DIR/venv/bin/activate >> $LOG_FILE 2>&1
+        
+        # Create a simple test script to debug import issues
+        echo "Creating import test script..." >> $LOG_FILE
+        cat > $INSTALL_DIR/test_import.py << EOF
+import sys
+print("Python path:")
+for p in sys.path:
+    print(f"  {p}")
+print("\nTrying import...")
+try:
+    import cybex_pulse
+    print("Success: cybex_pulse imported")
+    print(f"Module location: {cybex_pulse.__file__}")
+except Exception as e:
+    print(f"Error: {str(e)}")
+    sys.exit(1)
+EOF
+        
+        # Run the test script to get detailed import information
+        echo "Running test script for debugging..." >> $LOG_FILE
+        TEST_OUTPUT=$($INSTALL_DIR/venv/bin/python $INSTALL_DIR/test_import.py 2>&1)
+        echo "$TEST_OUTPUT" >> $LOG_FILE
         
         # Try import again after fix attempt
         if $INSTALL_DIR/venv/bin/python -c "import cybex_pulse; print('Module now imported successfully')" >> $LOG_FILE 2>&1; then
@@ -1096,7 +1145,12 @@ except Exception as e:
         else
             echo -e "${CROSS_MARK} ${RED}Still failing${NC}"
             echo "FAILED: Could not fix module import" >> $LOG_FILE
+            echo "Import test output: $TEST_OUTPUT" >> $LOG_FILE
             warning "The application may not work correctly. Check the log for details."
+            
+            # Create a symlink as a last resort
+            echo "Creating symlink as last resort..." >> $LOG_FILE
+            ln -sf $INSTALL_DIR $INSTALL_DIR/venv/lib/python*/site-packages/cybex_pulse >> $LOG_FILE 2>&1
         fi
     fi
     
