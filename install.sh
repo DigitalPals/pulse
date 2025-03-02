@@ -290,7 +290,7 @@ install_system_packages() {
                 if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                     log_warning "Could not install packages with standard names, trying alternative package names..."
                     # Fallback to alternative package names
-                    apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                    apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                         log_error "Failed to install Python packages via apt. See log for details."
                         cat $LOG_FILE | tail -n 20
                         exit 1
@@ -305,7 +305,7 @@ install_system_packages() {
                     if ! dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
                         # Fallback to alternative package names
-                        dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via dnf. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
@@ -317,7 +317,7 @@ install_system_packages() {
                     if ! yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
                         # Fallback to alternative package names
-                        yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via yum. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
@@ -341,7 +341,7 @@ install_system_packages() {
                 if ! zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                     log_warning "Could not install packages with standard names, trying alternative package names..."
                     # Fallback to alternative package names
-                    zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                    zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                         log_error "Failed to install Python packages via zypper. See log for details."
                         cat $LOG_FILE | tail -n 20
                         exit 1
@@ -355,7 +355,7 @@ install_system_packages() {
                     # Try correct package names first for apt
                     if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
-                        apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via apt. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
@@ -365,7 +365,7 @@ install_system_packages() {
                     # Try correct package names first for dnf
                     if ! dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
-                        dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via dnf. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
@@ -375,7 +375,7 @@ install_system_packages() {
                     # Try correct package names first for yum
                     if ! yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
-                        yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via yum. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
@@ -391,7 +391,7 @@ install_system_packages() {
                     # Try correct package names first for zypper
                     if ! zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                         log_warning "Could not install packages with standard names, trying alternative package names..."
-                        zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
                             log_error "Failed to install Python packages via zypper. See log for details."
                             cat $LOG_FILE | tail -n 20
                             exit 1
