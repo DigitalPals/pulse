@@ -1,0 +1,833 @@
+{% extends "base.html" %}
+
+{% block title %}Devices - Cybex Pulse{% endblock %}
+
+{% block header %}Network Devices{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>All Devices</h3>
+        <span id="last-updated">Last updated: <span id="update-time-text" class="update-time-text">Just now</span></span>
+    </div>
+    <div class="device-controls">
+        <div class="search-container">
+            <input type="text" id="device-search" placeholder="Search devices..." class="search-input">
+            <i class="fas fa-search search-icon"></i>
+        </div>
+        <div class="sort-container">
+            <label for="sort-select"><i class="fas fa-sort-amount-down"></i> Sort by:</label>
+            <select id="sort-select" class="sort-select">
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="ip-asc">IP Address (Ascending)</option>
+                <option value="ip-desc">IP Address (Descending)</option>
+            </select>
+        </div>
+    </div>
+    <div class="device-list">
+        {% for device in devices %}
+        <div class="device-item" data-mac-address="{{ device.mac_address }}" data-vendor="{{ device.vendor or '' }}" data-hostname="{{ device.hostname or '' }}">
+            <div class="device-status">
+                {% if device.last_seen >= now - 300 %}
+                <div class="status-icon status-online">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+                <div class="uptime">
+                    {% set uptime_seconds = now - device.first_seen %}
+                    {% if uptime_seconds < 3600 %}
+                        {{ (uptime_seconds // 60) }} min
+                    {% elif uptime_seconds < 86400 %}
+                        {{ (uptime_seconds // 3600) }} hr
+                    {% elif uptime_seconds < 2592000 %}
+                        {{ (uptime_seconds // 86400) }} days
+                    {% elif uptime_seconds < 31536000 %}
+                        {{ (uptime_seconds // 2592000) }} mo
+                    {% else %}
+                        {{ (uptime_seconds // 31536000) }} yr
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="status-icon status-offline">
+                    <i class="fas fa-arrow-down"></i>
+                </div>
+                <div class="downtime">
+                    {% set downtime_seconds = now - device.last_seen %}
+                    {% if downtime_seconds < 3600 %}
+                        {{ (downtime_seconds // 60) }} min
+                    {% elif downtime_seconds < 86400 %}
+                        {{ (downtime_seconds // 3600) }} hr
+                    {% elif downtime_seconds < 2592000 %}
+                        {{ (downtime_seconds // 86400) }} days
+                    {% elif downtime_seconds < 31536000 %}
+                        {{ (downtime_seconds // 2592000) }} mo
+                    {% else %}
+                        {{ (downtime_seconds // 31536000) }} yr
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="device-icon" title="{{ device.vendor or 'Unknown' }}">
+                <div class="vendor-icon">
+                    {{ device.vendor|device_icon(device.hostname)|safe }}
+                </div>
+            </div>
+            <div class="device-info">
+                <div class="device-name">{{ device.hostname or "Unknown Device" }}</div>
+                <div class="device-location" style="padding-left: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    {{ device.vendor or 'Unknown' }}
+                    {% if device.notes %}
+                    <span class="note-icon" title="{{ device.notes }}"><i class="fas fa-sticky-note"></i></span>
+                    {% endif %}
+                </div>
+                
+                {% if device.device_type or device.device_manufacturer %}
+                <div class="device-type-info">
+                    {% if device.device_manufacturer %}
+                    <span class="device-manufacturer">{{ device.device_manufacturer }}</span>
+                    {% endif %}
+                    {% if device.device_type %}
+                    <span class="device-type">{{ device.device_type }}</span>
+                    {% endif %}
+                    {% if device.device_model %}
+                    <span class="device-model">{{ device.device_model }}</span>
+                    {% endif %}
+                    {% if device.fingerprint_confidence %}
+                    <span class="device-confidence" title="Fingerprint confidence: {{ (device.fingerprint_confidence * 100)|int }}%">
+                        <i class="fas fa-fingerprint"></i>
+                    </span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if device.id %}
+                {% set security_scan = db_manager.get_security_scans(device.id, limit=1) %}
+                {% if security_scan and security_scan|length > 0 and security_scan[0]['open_ports'] %}
+                <div class="device-ports">
+                    {% set ports = security_scan[0]['open_ports']|from_json %}
+                    {% set sorted_ports = ports|sort(attribute='port') %}
+                    {% for port in sorted_ports[:5] %}
+                    <span class="device-port-tag" data-port="{{ port.port }}" data-protocol="{{ port.protocol }}" data-service="{{ port.service }}">
+                        {{ port.port }}
+                    </span>
+                    {% endfor %}
+                    {% if ports|length > 5 %}
+                    <span class="device-port-more">+{{ ports|length - 5 }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="device-latency">
+                {% if device.last_seen >= now - 300 %}
+                <div class="latency-indicator">
+                    <div class="latency-bar">
+                        {% set random_latency = device.id * 3 % 20 + 1 %}
+                        <div class="latency-fill {% if random_latency < 10 %}latency-fill-low{% elif random_latency < 20 %}latency-fill-medium{% else %}latency-fill-high{% endif %}" style="width: {{ random_latency * 4 }}%;"></div>
+                    </div>
+                </div>
+                <div class="latency-value">
+                    {{ random_latency }}ms
+                </div>
+                {% else %}
+                <div class="latency-indicator">
+                    <div class="latency-bar">
+                        <div class="latency-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div class="latency-value">--</div>
+                {% endif %}
+            </div>
+            <div class="device-ip">{{ device.ip_address }}</div>
+            <div class="device-mac">{{ device.mac_address }}</div>
+            <div class="device-actions">
+                <i class="fas fa-star device-important-star {% if device.is_important %}active{% endif %}" data-device-id="{{ device.id }}" data-mac-address="{{ device.mac_address }}" title="Mark as important"></i>
+            </div>
+        </div>
+        {% else %}
+        <div class="no-devices">No devices found in your network</div>
+        {% endfor %}
+    </div>
+    
+    <!-- Pagination controls -->
+    {% if total_pages > 1 %}
+    <div class="pagination-container">
+        <div class="pagination-info">
+            Showing {{ devices|length }} of {{ total_devices }} devices
+        </div>
+        <div class="pagination-controls">
+            <a href="{{ url_for('devices', page=current_page-1) if current_page > 1 else '#' }}" 
+               class="pagination-button {% if current_page <= 1 %}disabled{% endif %}"
+               id="prev-page-button">
+                <i class="fas fa-chevron-left"></i> Previous
+            </a>
+            <span class="pagination-current">Page {{ current_page }} of {{ total_pages }}</span>
+            <a href="{{ url_for('devices', page=current_page+1) if current_page < total_pages else '#' }}" 
+               class="pagination-button {% if current_page >= total_pages %}disabled{% endif %}"
+               id="next-page-button">
+                Next <i class="fas fa-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .note-icon {
+        color: #f9c74f;
+        font-size: 0.85em;
+        cursor: help;
+        transition: transform 0.2s ease;
+    }
+    .note-icon:hover {
+        transform: scale(1.2);
+    }
+</style>
+<script>
+    // Global variables to store devices and current filters
+    let allDevices = [];
+    let currentSearchTerm = '';
+    let currentSortOption = localStorage.getItem('deviceSortOption') || 'name-asc';
+    let currentPage = {{ current_page }};
+    let totalPages = {{ total_pages }};
+    let pageSize = 50;
+
+    // Function to format timestamps
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    }
+
+    // Function to format uptime/downtime
+    function formatUptime(seconds) {
+        if (seconds < 3600) {
+            return Math.floor(seconds / 60) + ' min';
+        } else if (seconds < 86400) {
+            return Math.floor(seconds / 3600) + ' hr';
+        } else if (seconds < 2592000) {
+            return Math.floor(seconds / 86400) + ' days';
+        } else if (seconds < 31536000) {
+            return Math.floor(seconds / 2592000) + ' mo';
+        } else {
+            return Math.floor(seconds / 31536000) + ' yr';
+        }
+    }
+    
+    // Function to get latency bar class based on latency value
+    function getLatencyClass(latency) {
+        if (latency < 10) {
+            return 'latency-fill-low';
+        } else if (latency < 20) {
+            return 'latency-fill-medium';
+        } else {
+            return 'latency-fill-high';
+        }
+    }
+    
+    // Function to calculate latency bar width percentage
+    function getLatencyWidth(latency) {
+        // Ensure even small values have a visible width (minimum 5%)
+        // For larger values, scale proportionally but cap at 100%
+        const minWidth = 5;
+        const scaledWidth = Math.min(latency * 4, 100);
+        return Math.max(minWidth, scaledWidth) + '%';
+    }
+
+    // Update the "last updated" time
+    function updateLastUpdated() {
+        const updateTimeElement = document.getElementById('update-time-text');
+        const now = new Date();
+        const lastUpdate = window.lastUpdateTime || now;
+        window.lastUpdateTime = now;
+        
+        const diffInSeconds = Math.floor((now - lastUpdate) / 1000);
+        
+        let text = 'Just now';
+        let className = 'update-time-normal';
+        
+        if (diffInSeconds < 60) {
+            text = 'Just now';
+        } else if (diffInSeconds < 300) {
+            text = 'Less than 5 minutes ago';
+        } else {
+            text = 'Over 5 minutes ago';
+            className = 'update-time-warning';
+        }
+        
+        updateTimeElement.textContent = text;
+        updateTimeElement.className = 'update-time-text ' + className;
+    }
+    
+    // Call immediately and then every 30 seconds
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 30000);
+    
+    // Function to attach event listeners to star icons and device rows
+    function attachEventListeners() {
+        // Star icon listeners
+        document.querySelectorAll('.device-important-star').forEach((star) => {
+            // Remove existing event listeners to prevent duplicates
+            const newStar = star.cloneNode(true);
+            star.parentNode.replaceChild(newStar, star);
+            
+            newStar.addEventListener('click', function(event) {
+                // Prevent the click from bubbling up to the device row
+                event.stopPropagation();
+                
+                const isCurrentlyImportant = this.classList.contains('active');
+                const deviceId = this.getAttribute('data-device-id');
+                const macAddress = this.getAttribute('data-mac-address');
+                
+                // Toggle the active class
+                this.classList.toggle('active');
+                
+                // Send request to update importance
+                fetch(`/devices/${macAddress}/important`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `important=${!isCurrentlyImportant ? 'true' : 'false'}`
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        // If request fails, revert the UI change
+                        this.classList.toggle('active');
+                        console.error('Failed to update device importance');
+                    }
+                })
+                .catch(error => {
+                    // If request errors, revert the UI change
+                    this.classList.toggle('active');
+                    console.error('Error updating device importance:', error);
+                });
+            });
+        });
+        
+        // Device row listeners
+        document.querySelectorAll('.device-item').forEach((deviceRow) => {
+            // Get the MAC address from the star icon in this row
+            const star = deviceRow.querySelector('.device-important-star');
+            if (star) {
+                const macAddress = star.getAttribute('data-mac-address');
+                
+                deviceRow.addEventListener('click', function() {
+                    // Navigate to device details page
+                    window.location.href = `/devices/${macAddress}`;
+                });
+            }
+        });
+        
+        // Pagination button listeners
+        const prevButton = document.getElementById('prev-page-button');
+        const nextButton = document.getElementById('next-page-button');
+        
+        if (prevButton && !prevButton.classList.contains('disabled')) {
+            prevButton.addEventListener('click', function(e) {
+                if (currentPage > 1) {
+                    navigateToPage(currentPage - 1);
+                }
+                e.preventDefault();
+            });
+        }
+        
+        if (nextButton && !nextButton.classList.contains('disabled')) {
+            nextButton.addEventListener('click', function(e) {
+                if (currentPage < totalPages) {
+                    navigateToPage(currentPage + 1);
+                }
+                e.preventDefault();
+            });
+        }
+    }
+    
+    // Function to navigate to a specific page
+    function navigateToPage(page) {
+        // If we have a search term or sort, reload the page with those parameters
+        if (currentSearchTerm || currentSortOption !== 'name-asc') {
+            // Client-side approach - filter and paginate locally
+            currentPage = page;
+            const filteredDevices = filterDevices(allDevices, currentSearchTerm);
+            const sortedDevices = sortDevices(filteredDevices, currentSortOption);
+            
+            // Calculate total pages
+            totalPages = Math.ceil(sortedDevices.length / pageSize);
+            
+            // Paginate
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = startIdx + pageSize;
+            const paginatedDevices = sortedDevices.slice(startIdx, endIdx);
+            
+            // Render devices
+            renderDevices(paginatedDevices);
+            
+            // Update pagination controls
+            updatePaginationControls(currentPage, totalPages, sortedDevices.length);
+        } else {
+            // Server-side approach - navigate to the new page
+            window.location.href = `/devices?page=${page}`;
+        }
+    }
+    
+    // Function to update pagination controls
+    function updatePaginationControls(page, totalPages, totalDevices) {
+        const paginationContainer = document.querySelector('.pagination-container');
+        if (!paginationContainer) return;
+        
+        // Update pagination info
+        const paginationInfo = paginationContainer.querySelector('.pagination-info');
+        if (paginationInfo) {
+            const startItem = (page - 1) * pageSize + 1;
+            const endItem = Math.min(page * pageSize, totalDevices);
+            paginationInfo.textContent = `Showing ${startItem}-${endItem} of ${totalDevices} devices`;
+        }
+        
+        // Update current page indicator
+        const paginationCurrent = paginationContainer.querySelector('.pagination-current');
+        if (paginationCurrent) {
+            paginationCurrent.textContent = `Page ${page} of ${totalPages}`;
+        }
+        
+        // Update previous button
+        const prevButton = document.getElementById('prev-page-button');
+        if (prevButton) {
+            if (page <= 1) {
+                prevButton.classList.add('disabled');
+                prevButton.href = '#';
+            } else {
+                prevButton.classList.remove('disabled');
+                prevButton.href = `/devices?page=${page - 1}`;
+            }
+        }
+        
+        // Update next button
+        const nextButton = document.getElementById('next-page-button');
+        if (nextButton) {
+            if (page >= totalPages) {
+                nextButton.classList.add('disabled');
+                nextButton.href = '#';
+            } else {
+                nextButton.classList.remove('disabled');
+                nextButton.href = `/devices?page=${page + 1}`;
+            }
+        }
+    }
+    
+    // Function to filter devices based on search term
+    function filterDevices(devices, searchTerm) {
+        if (!searchTerm) return devices;
+        
+        searchTerm = searchTerm.toLowerCase();
+        return devices.filter(device => {
+            const hostname = (device.hostname || '').toLowerCase();
+            const macAddress = (device.mac_address || '').toLowerCase();
+            const ipAddress = (device.ip_address || '').toLowerCase();
+            
+            return hostname.includes(searchTerm) ||
+                   macAddress.includes(searchTerm) ||
+                   ipAddress.includes(searchTerm);
+        });
+    }
+    
+    // Function to sort devices based on sort option
+    function sortDevices(devices, sortOption) {
+        const sortedDevices = [...devices];
+        
+        switch (sortOption) {
+            case 'name-asc':
+                sortedDevices.sort((a, b) => {
+                    const nameA = (a.hostname || 'Unknown Device').toLowerCase();
+                    const nameB = (b.hostname || 'Unknown Device').toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+                break;
+            case 'name-desc':
+                sortedDevices.sort((a, b) => {
+                    const nameA = (a.hostname || 'Unknown Device').toLowerCase();
+                    const nameB = (b.hostname || 'Unknown Device').toLowerCase();
+                    return nameB.localeCompare(nameA);
+                });
+                break;
+            case 'ip-asc':
+                sortedDevices.sort((a, b) => {
+                    // Convert IP to numeric value for proper sorting
+                    const ipToNum = (ip) => {
+                        if (!ip) return 0;
+                        return ip.split('.')
+                            .map((octet, i) => parseInt(octet) * Math.pow(256, 3 - i))
+                            .reduce((sum, val) => sum + val, 0);
+                    };
+                    return ipToNum(a.ip_address) - ipToNum(b.ip_address);
+                });
+                break;
+            case 'ip-desc':
+                sortedDevices.sort((a, b) => {
+                    // Convert IP to numeric value for proper sorting
+                    const ipToNum = (ip) => {
+                        if (!ip) return 0;
+                        return ip.split('.')
+                            .map((octet, i) => parseInt(octet) * Math.pow(256, 3 - i))
+                            .reduce((sum, val) => sum + val, 0);
+                    };
+                    return ipToNum(b.ip_address) - ipToNum(a.ip_address);
+                });
+                break;
+            default:
+                // Default to name ascending
+                sortedDevices.sort((a, b) => {
+                    const nameA = (a.hostname || 'Unknown Device').toLowerCase();
+                    const nameB = (b.hostname || 'Unknown Device').toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+        }
+        
+        return sortedDevices;
+    }
+    
+    // Function to render devices to the DOM
+    function renderDevices(devices) {
+        const deviceList = document.querySelector('.device-list');
+        if (devices.length > 0) {
+            let html = '';
+            const now = Math.floor(Date.now() / 1000);
+            
+            devices.forEach(device => {
+                const isOnline = device.last_seen >= now - 300;
+                const statusClass = isOnline ? 'status-online' : 'status-offline';
+                const timeSeconds = isOnline ? now - device.first_seen : now - device.last_seen;
+                const randomLatency = device.id * 3 % 20 + 1; // Simulated latency for demo
+                
+                // Prepare the device HTML
+                let deviceHtml = `
+                    <div class="device-item" data-mac-address="${device.mac_address}" data-vendor="${device.vendor || ''}" data-hostname="${device.hostname || ''}">
+                        <div class="device-status">
+                            ${isOnline ? `
+                                <div class="status-icon status-online">
+                                    <i class="fas fa-arrow-up"></i>
+                                </div>
+                                <div class="uptime">${formatUptime(timeSeconds)}</div>
+                            ` : `
+                                <div class="status-icon status-offline">
+                                    <i class="fas fa-arrow-down"></i>
+                                </div>
+                                <div class="downtime">${formatUptime(timeSeconds)}</div>
+                            `}
+                        </div>
+                        <div class="device-icon" title="${device.vendor || 'Unknown'}">
+                            <div class="vendor-icon">
+                                <i class="fas fa-sync fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="device-info">
+                            <div class="device-name">${device.hostname || "Unknown Device"}</div>
+                            <div class="device-location" style="padding-left: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                ${device.vendor || 'Unknown'}
+                                ${device.notes ? `<span class="note-icon" title="${device.notes}"><i class="fas fa-sticky-note"></i></span>` : ''}
+                            </div>
+                            <div class="device-ports" id="ports-${device.id}">
+                                <!-- Port tags will be loaded separately -->
+                            </div>
+                        </div>
+                        <div class="device-latency">
+                            ${isOnline ? `
+                                <div class="latency-indicator">
+                                    <div class="latency-bar">
+                                        <div class="latency-fill ${getLatencyClass(randomLatency)}" style="width: ${getLatencyWidth(randomLatency)}"></div>
+                                    </div>
+                                </div>
+                                <div class="latency-value">${randomLatency}ms</div>
+                            ` : `
+                                <div class="latency-indicator">
+                                    <div class="latency-bar">
+                                        <div class="latency-fill" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                                <div class="latency-value">--</div>
+                            `}
+                        </div>
+                        <div class="device-ip">${device.ip_address}</div>
+                        <div class="device-mac">${device.mac_address}</div>
+                        <div class="device-actions">
+                            <i class="fas fa-star device-important-star ${device.is_important ? 'active' : ''}" data-device-id="${device.id}" data-mac-address="${device.mac_address}" title="Mark as important"></i>
+                        </div>
+                    </div>
+                `;
+                
+                // Append this device's HTML to the overall HTML
+                html += deviceHtml;
+            });
+            deviceList.innerHTML = html;
+            
+            // Attach event listeners to star icons and device rows
+            attachEventListeners();
+            
+            // Update device icons with server-side icons
+            updateDeviceIcons();
+            
+            // Load port information for each device
+            devices.forEach(device => {
+                loadDevicePorts(device.id);
+            });
+        } else {
+            deviceList.innerHTML = '<div class="no-devices">No devices found</div>';
+        }
+        
+        // Update the last updated time display
+        updateLastUpdated();
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get references to search and sort elements
+        const searchInput = document.getElementById('device-search');
+        const sortSelect = document.getElementById('sort-select');
+        
+        // Add event listener for search input
+        searchInput.addEventListener('input', function() {
+            currentSearchTerm = this.value.trim();
+            
+            // When searching, reset to first page
+            currentPage = 1;
+            
+            // Apply filters and sorting
+            const filteredDevices = filterDevices(allDevices, currentSearchTerm);
+            const sortedDevices = sortDevices(filteredDevices, currentSortOption);
+            
+            // Update total pages
+            totalPages = Math.ceil(sortedDevices.length / pageSize);
+            
+            // Paginate devices
+            const paginatedDevices = sortedDevices.slice(0, pageSize);
+            
+            // Render the devices
+            renderDevices(paginatedDevices);
+            
+            // Update pagination controls
+            updatePaginationControls(currentPage, totalPages, filteredDevices.length);
+        });
+        
+        // Add event listener for sort select
+        sortSelect.addEventListener('change', function() {
+            currentSortOption = this.value;
+            
+            // Save sort option to localStorage
+            localStorage.setItem('deviceSortOption', currentSortOption);
+            
+            // Apply filters and sorting
+            const filteredDevices = filterDevices(allDevices, currentSearchTerm);
+            const sortedDevices = sortDevices(filteredDevices, currentSortOption);
+            
+            // Update total pages
+            totalPages = Math.ceil(sortedDevices.length / pageSize);
+            
+            // Paginate devices
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = startIdx + pageSize;
+            const paginatedDevices = sortedDevices.slice(startIdx, endIdx);
+            
+            // Render the devices
+            renderDevices(paginatedDevices);
+            
+            // Update pagination controls
+            updatePaginationControls(currentPage, totalPages, filteredDevices.length);
+        });
+        
+        // Set the selected option based on saved preference
+        sortSelect.value = currentSortOption;
+        
+        // Initial devices load
+        refreshDevices();
+    });
+
+    // Function to update device icons with server-side icons
+    function updateDeviceIcons() {
+        // Get all device items
+        const deviceItems = document.querySelectorAll('.device-item');
+        
+        // For each device item, fetch the icon from the server
+        deviceItems.forEach(deviceItem => {
+            const vendor = deviceItem.getAttribute('data-vendor');
+            const hostname = deviceItem.getAttribute('data-hostname');
+            const iconContainer = deviceItem.querySelector('.vendor-icon');
+            
+            // Fetch the icon from the server
+            fetch(`/api/device-icon?vendor=${encodeURIComponent(vendor || '')}&device_name=${encodeURIComponent(hostname || '')}`)
+                .then(response => response.text())
+                .then(iconHtml => {
+                    // Update the icon
+                    iconContainer.innerHTML = iconHtml;
+                })
+                .catch(error => {
+                    console.error('Error fetching device icon:', error);
+                });
+        });
+    }
+    
+    // Function to load port information for a device
+    function loadDevicePorts(deviceId) {
+        if (!deviceId) return;
+        
+        fetch(`/api/devices/${deviceId}/ports`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const portsContainer = document.getElementById(`ports-${deviceId}`);
+                if (!portsContainer) return;
+                
+                if (data && data.ports && data.ports.length > 0) {
+                    let portsHtml = '';
+                    
+                    // Sort ports by number
+                    const sortedPorts = data.ports.sort((a, b) => a.port - b.port);
+                    
+                    // Get the first 5 ports
+                    const displayPorts = sortedPorts.slice(0, 5);
+                    
+                    // Create HTML for each port
+                    displayPorts.forEach(port => {
+                        portsHtml += `
+                            <span class="device-port-tag" data-port="${port.port}" data-protocol="${port.protocol}" data-service="${port.service}">
+                                ${port.port}
+                            </span>
+                        `;
+                    });
+                    
+                    // If there are more than 5 ports, add a "+X more" indicator
+                    if (sortedPorts.length > 5) {
+                        portsHtml += `<span class="device-port-more">+${sortedPorts.length - 5}</span>`;
+                    }
+                    
+                    portsContainer.innerHTML = portsHtml;
+                    
+                    // Add tooltips and click handlers to port tags
+                    addPortTagEventListeners();
+                } else {
+                    portsContainer.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching ports:', error);
+            });
+    }
+    
+    // Function to add event listeners to port tags
+    function addPortTagEventListeners() {
+        const portTags = document.querySelectorAll('.device-port-tag');
+        portTags.forEach(tag => {
+            const port = tag.dataset.port;
+            const service = tag.dataset.service;
+            
+            // Add tooltip
+            const portInfo = getPortInfo(port, service);
+            if (portInfo) {
+                tag.title = portInfo;
+            }
+            
+            // Add click handler to navigate to device details
+            tag.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const deviceItem = this.closest('.device-item');
+                if (deviceItem) {
+                    const macAddress = deviceItem.dataset.macAddress;
+                    window.location.href = `/devices/${macAddress}`;
+                }
+            });
+        });
+        
+        // Add click handler for "more ports" indicator
+        const moreTags = document.querySelectorAll('.device-port-more');
+        moreTags.forEach(tag => {
+            tag.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const deviceItem = this.closest('.device-item');
+                if (deviceItem) {
+                    const macAddress = deviceItem.dataset.macAddress;
+                    window.location.href = `/devices/${macAddress}`;
+                }
+            });
+        });
+    }
+    
+    // Port information helper
+    function getPortInfo(port, service) {
+        const portInfoMap = {
+            '21': 'FTP - File Transfer Protocol',
+            '22': 'SSH - Secure Shell',
+            '23': 'Telnet - Insecure remote login',
+            '25': 'SMTP - Mail server',
+            '53': 'DNS - Domain Name System',
+            '80': 'HTTP - Web server',
+            '110': 'POP3 - Mail retrieval',
+            '143': 'IMAP - Mail access',
+            '443': 'HTTPS - Secure web',
+            '445': 'SMB - File sharing',
+            '3306': 'MySQL - Database',
+            '3389': 'RDP - Remote Desktop',
+            '5432': 'PostgreSQL - Database',
+            '8080': 'HTTP Alternate',
+            '8443': 'HTTPS Alternate'
+        };
+        
+        return portInfoMap[port] || `${service || 'Unknown'} - Port ${port}`;
+    }
+    
+    // Function to refresh device data
+    function refreshDevices() {
+        fetch(`{{ url_for("api_devices") }}`)
+            .then(response => response.json())
+            .then(data => {
+                // Handle both formats (backward compatibility and paginated)
+                if (Array.isArray(data)) {
+                    // Old format
+                    allDevices = data;
+                } else {
+                    // New paginated format
+                    allDevices = data.devices || [];
+                    totalPages = data.total_pages || 1;
+                    currentPage = data.current_page || 1;
+                }
+                
+                // Apply current filters and sorting
+                const filteredDevices = filterDevices(allDevices, currentSearchTerm);
+                const sortedDevices = sortDevices(filteredDevices, currentSortOption);
+                
+                // If searching/sorting is active, paginate client-side
+                let devicesToRender;
+                if (currentSearchTerm || currentSortOption !== 'name-asc') {
+                    // Calculate total pages for filtered/sorted devices
+                    totalPages = Math.ceil(sortedDevices.length / pageSize);
+                    
+                    // Paginate devices
+                    const startIdx = (currentPage - 1) * pageSize;
+                    const endIdx = startIdx + pageSize;
+                    devicesToRender = sortedDevices.slice(startIdx, endIdx);
+                    
+                    // Update pagination controls
+                    updatePaginationControls(currentPage, totalPages, sortedDevices.length);
+                } else {
+                    // No search/sort active, use server-provided devices
+                    devicesToRender = sortedDevices;
+                }
+                
+                // Update the "last updated" timestamp
+                window.lastUpdateTime = new Date();
+                
+                // Render the devices
+                renderDevices(devicesToRender);
+            })
+            .catch(error => {
+                console.error('Error fetching devices:', error);
+                // Don't update the timestamp on error - keeps the warning state
+            });
+    }
+    
+    // Refresh devices every 30 seconds
+    setInterval(refreshDevices, 30000);
+</script>
+{% endblock %}

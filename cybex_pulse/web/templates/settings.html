@@ -1,0 +1,725 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Cybex Pulse{% endblock %}
+
+{% block header %}Settings{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('settings') }}">
+    <!-- Add tabbed navigation -->
+    <div class="settings-tabs">
+        <a href="#network" class="tab-link active" onclick="showTab('network')">
+            <i class="fas fa-network-wired"></i> Network
+        </a>
+        <a href="#alerts" class="tab-link" onclick="showTab('alerts')">
+            <i class="fas fa-bell"></i> Alerts
+        </a>
+        <a href="#monitoring" class="tab-link" onclick="showTab('monitoring')">
+            <i class="fas fa-chart-line"></i> Monitoring
+        </a>
+        <a href="#security" class="tab-link" onclick="showTab('security')">
+            <i class="fas fa-shield-alt"></i> Security
+        </a>
+        <a href="#fingerprinting" class="tab-link" onclick="showTab('fingerprinting')">
+            <i class="fas fa-fingerprint"></i> Fingerprinting
+        </a>
+        <a href="#interface" class="tab-link" onclick="showTab('interface')">
+            <i class="fas fa-desktop"></i> Interface
+        </a>
+        <a href="#system" class="tab-link" onclick="showTab('system')">
+            <i class="fas fa-cogs"></i> System
+        </a>
+    </div>
+
+    <!-- Network settings section -->
+    <div id="network" class="tab-content active">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-network-wired"></i> Network Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="subnet">Subnet to Scan</label>
+                        <input type="text" id="subnet" name="subnet" class="form-control" value="{{ config.network.subnet }}" placeholder="e.g., 192.168.1.0/24">
+                        <small class="form-text text-muted">The subnet to scan for devices in CIDR notation.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="scan_interval">Scan Interval</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="scan_interval" name="scan_interval" class="form-control" value="{{ config.general.scan_interval }}" min="10">
+                            <span class="unit">seconds</span>
+                        </div>
+                        <small class="form-text text-muted">How often to scan the network for devices.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Configure how Cybex Pulse scans your network for devices.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Alert settings section -->
+    <div id="alerts" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-bell"></i> Alert Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="alerts_enabled" name="alerts_enabled" class="form-check-input toggle-switch" {% if config.alerts.enabled %}checked{% endif %}>
+                            <label for="alerts_enabled" class="form-check-label toggle-label">Enable Alert System</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group alert-option">
+                                <input type="checkbox" id="new_device_alert" name="new_device_alert" class="form-check-input" {% if config.alerts.new_device %}checked{% endif %}>
+                                <label for="new_device_alert" class="form-check-label">
+                                    <span class="alert-title">New Device Found</span>
+                                    <span class="alert-desc">Alert when a new device joins your network</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group alert-option">
+                                <input type="checkbox" id="device_offline_alert" name="device_offline_alert" class="form-check-input" {% if config.alerts.device_offline %}checked{% endif %}>
+                                <label for="device_offline_alert" class="form-check-label">
+                                    <span class="alert-title">Device Offline</span>
+                                    <span class="alert-desc">Alert when any device goes offline</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group alert-option">
+                                <input type="checkbox" id="important_device_offline_alert" name="important_device_offline_alert" class="form-check-input" {% if config.alerts.important_device_offline %}checked{% endif %}>
+                                <label for="important_device_offline_alert" class="form-check-label">
+                                    <span class="alert-title">Important Device Offline</span>
+                                    <span class="alert-desc">Alert when an important device goes offline</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group alert-option">
+                                <input type="checkbox" id="website_error_alert" name="website_error_alert" class="form-check-input" {% if config.alerts.website_error %}checked{% endif %}>
+                                <label for="website_error_alert" class="form-check-label">
+                                    <span class="alert-title">Website Errors</span>
+                                    <span class="alert-desc">Alert when monitored websites have errors</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="latency_threshold">High Latency Threshold</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="latency_threshold" name="latency_threshold" class="form-control" value="{{ config.alerts.latency_threshold }}" min="1">
+                                <span class="unit">ms</span>
+                            </div>
+                            <small class="form-text text-muted">Alert if network latency exceeds this threshold.</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section-divider"></div>
+                
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="telegram_enabled" name="telegram_enabled" class="form-check-input toggle-switch" {% if config.telegram.enabled %}checked{% endif %}>
+                            <label for="telegram_enabled" class="form-check-label toggle-label">Telegram Notifications</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="telegram_api_token">Telegram Bot API Token</label>
+                                <input type="text" id="telegram_api_token" name="telegram_api_token" class="form-control" value="{{ config.telegram.api_token }}">
+                                <small class="form-text text-muted">API token from @BotFather.</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="telegram_chat_id">Chat ID</label>
+                                <input type="text" id="telegram_chat_id" name="telegram_chat_id" class="form-control" value="{{ config.telegram.chat_id }}">
+                                <small class="form-text text-muted">Chat ID to send alerts to.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Configure how and when you receive alerts about your network.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monitoring settings section -->
+    <div id="monitoring" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-tachometer-alt"></i> Internet Health Check</h3>
+            </div>
+            <div class="card-body">
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="internet_health_enabled" name="internet_health_enabled" class="form-check-input toggle-switch" {% if config.monitoring.internet_health.enabled %}checked{% endif %}>
+                            <label for="internet_health_enabled" class="form-check-label toggle-label">Enable Speed Testing</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="internet_health_interval">Check Interval</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="internet_health_interval" name="internet_health_interval" class="form-control" value="{{ config.monitoring.internet_health.interval }}" min="60">
+                                    <span class="unit">seconds</span>
+                                </div>
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle"></i> Recommended: 3600 (hourly) to avoid excessive bandwidth usage
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-globe"></i> Website Monitoring</h3>
+            </div>
+            <div class="card-body">
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="websites_enabled" name="websites_enabled" class="form-check-input toggle-switch" {% if config.monitoring.websites.enabled %}checked{% endif %}>
+                            <label for="websites_enabled" class="form-check-label toggle-label">Enable Website Monitoring</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="websites_interval">Check Interval</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="websites_interval" name="websites_interval" class="form-control" value="{{ config.monitoring.websites.interval }}" min="60">
+                                    <span class="unit">seconds</span>
+                                </div>
+                                <small class="form-text text-muted">How often to check website availability.</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group website-list">
+                            <label>Websites to Monitor</label>
+                            <div class="website-inputs">
+                                {% for i in range(5) %}
+                                    {% set url = config.monitoring.websites.urls[i] if i < config.monitoring.websites.urls|length else '' %}
+                                    <div class="website-input-row">
+                                        <input type="url" id="website_url_{{ i }}" name="website_url_{{ i }}" class="form-control" value="{{ url }}" placeholder="https://example.com">
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <small class="form-text text-muted">Enter up to 5 websites to monitor for availability and response time.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Monitor your internet performance and website availability.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security settings section -->
+    <div id="security" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-shield-alt"></i> Security Scanning</h3>
+            </div>
+            <div class="card-body">
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="security_enabled" name="security_enabled" class="form-check-input toggle-switch" {% if config.monitoring.security.enabled %}checked{% endif %}>
+                            <label for="security_enabled" class="form-check-label toggle-label">Enable Security Scanning</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="security_interval">Scan Interval</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="security_interval" name="security_interval" class="form-control" value="{{ config.monitoring.security.interval }}" min="3600">
+                                    <span class="unit">seconds</span>
+                                </div>
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle"></i> Recommended: 86400 (daily) as scans can be resource intensive
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info security-note">
+                            <div class="alert-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="alert-content">
+                                <strong>Security scanning uses nmap to check for open ports on your network devices.</strong>
+                                <ul>
+                                    <li>Requires elevated permissions</li>
+                                    <li>May trigger security software alerts</li>
+                                    <li>Only scans your local network</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fingerprinting settings section -->
+    <div id="fingerprinting" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-fingerprint"></i> Device Fingerprinting</h3>
+            </div>
+            <div class="card-body">
+                <div class="toggle-section">
+                    <div class="toggle-header">
+                        <div class="form-check">
+                            <input type="checkbox" id="fingerprinting_enabled" name="fingerprinting_enabled" class="form-check-input toggle-switch" {% if config.fingerprinting.enabled %}checked{% endif %}>
+                            <label for="fingerprinting_enabled" class="form-check-label toggle-label">Enable Device Fingerprinting</label>
+                        </div>
+                    </div>
+                    <div class="toggle-content">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="fingerprinting_confidence">Minimum Confidence Threshold</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="fingerprinting_confidence" name="fingerprinting_confidence" class="form-control" value="{{ config.fingerprinting.confidence_threshold|default(0.5) }}" min="0.1" max="1.0" step="0.1">
+                                    <span class="unit">confidence</span>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Minimum confidence level (0.1-1.0) required to record device identification.
+                                </small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="fingerprinting_max_threads">Max Threads</label>
+                                <input type="number" id="fingerprinting_max_threads" name="fingerprinting_max_threads" class="form-control" value="{{ config.fingerprinting.max_threads|default(10) }}" min="1" max="20">
+                                <small class="form-text text-muted">
+                                    Maximum number of concurrent threads for fingerprinting (1-20).
+                                </small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="fingerprinting_timeout">Timeout</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="fingerprinting_timeout" name="fingerprinting_timeout" class="form-control" value="{{ config.fingerprinting.timeout|default(2) }}" min="1" max="10">
+                                    <span class="unit">seconds</span>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Timeout for network operations during fingerprinting (1-10 seconds).
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info fingerprinting-note">
+                            <div class="alert-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="alert-content">
+                                <strong>Device fingerprinting helps identify network devices based on various characteristics:</strong>
+                                <ul>
+                                    <li>MAC address vendor prefixes</li>
+                                    <li>Open ports and services</li>
+                                    <li>HTTP headers and responses</li>
+                                    <li>SNMP information (when available)</li>
+                                    <li>mDNS/Bonjour service discovery</li>
+                                </ul>
+                                <p>Fingerprinting occurs after basic network scanning and provides more detailed device identification.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Configure how devices are identified on your network with advanced fingerprinting techniques.</span>
+            </div>
+        </div>
+        
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-database"></i> Device Signatures</h3>
+            </div>
+            <div class="card-body">
+                <div class="signatures-info">
+                    <div class="signature-categories">
+                        <div class="signature-category">
+                            <div class="category-icon">
+                                <i class="fas fa-wifi"></i>
+                            </div>
+                            <div class="category-info">
+                                <div class="category-name">Network Equipment</div>
+                                <div class="category-examples">Unifi, Cisco, Netgear, etc.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="signature-category">
+                            <div class="category-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="category-info">
+                                <div class="category-name">NAS Systems</div>
+                                <div class="category-examples">Synology, QNAP, TrueNAS, etc.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="signature-category">
+                            <div class="category-icon">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <div class="category-info">
+                                <div class="category-name">Smart Home/IoT</div>
+                                <div class="category-examples">Shelly, Sonos, Philips Hue, etc.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="signature-category">
+                            <div class="category-icon">
+                                <i class="fas fa-tv"></i>
+                            </div>
+                            <div class="category-info">
+                                <div class="category-name">Media/Entertainment</div>
+                                <div class="category-examples">Roku, Apple TV, Chromecast, etc.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="signature-category">
+                            <div class="category-icon">
+                                <i class="fas fa-print"></i>
+                            </div>
+                            <div class="category-info">
+                                <div class="category-name">Printers</div>
+                                <div class="category-examples">HP, Brother, Canon, Epson, etc.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Pulse includes signatures for these device categories to help identify devices on your network.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Interface settings section -->
+    <div id="interface" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-desktop"></i> Web Interface Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="web_host">Listen Address</label>
+                        <input type="text" id="web_host" name="web_host" class="form-control" value="{{ config.web_interface.host }}">
+                        <small class="form-text text-muted">
+                            <i class="fas fa-info-circle"></i> Use 0.0.0.0 to listen on all interfaces, or 127.0.0.1 for local access only
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="web_port">Port</label>
+                        <input type="number" id="web_port" name="web_port" class="form-control" value="{{ config.web_interface.port }}" min="1024" max="65535">
+                        <small class="form-text text-muted">Port to run the web interface on (1024-65535).</small>
+                    </div>
+                </div>
+                
+                <div class="section-divider"></div>
+                
+                <div class="auth-section">
+                    <h4><i class="fas fa-lock"></i> Authentication</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="web_username">Username</label>
+                            <input type="text" id="web_username" name="web_username" class="form-control" value="{{ config.web_interface.username }}">
+                            <small class="form-text text-muted">Leave empty for no authentication</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="web_password">Password</label>
+                            <input type="password" id="web_password" name="web_password" class="form-control">
+                            <small class="form-text text-muted">Leave empty to keep current password</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Configure how the web interface is accessed and secured.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System settings section -->
+    <div id="system" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-cogs"></i> System Tools Status</h3>
+                <p class="text-muted">Cybex Pulse relies on several system tools to scan and monitor your network. This section shows the status of all required tools.</p>
+            </div>
+            <div class="card-body">
+                <div class="system-tools">
+                    <!-- Network Discovery Tools -->
+                    <div class="tool-status-card {% if tool_status.get('arp-scan', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-network-wired"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">arp-scan</div>
+                            <div class="tool-desc">Network discovery</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('arp-scan', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Network Utilities -->
+                    <div class="tool-status-card {% if tool_status.get('arp', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-sitemap"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">arp</div>
+                            <div class="tool-desc">ARP table management</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('arp', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="tool-status-card {% if tool_status.get('ip', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">ip</div>
+                            <div class="tool-desc">Network configuration</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('ip', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="tool-status-card {% if tool_status.get('getent', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-address-book"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">getent</div>
+                            <div class="tool-desc">Name service lookup</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('getent', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Security Tools -->
+                    <div class="tool-status-card {% if tool_status.get('nmap', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">nmap</div>
+                            <div class="tool-desc">Security scanning</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('nmap', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Device Information Tools -->
+                    <div class="tool-status-card {% if tool_status.get('snmpwalk', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">snmpwalk</div>
+                            <div class="tool-desc">Device information</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('snmpwalk', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Service Discovery Tools -->
+                    <div class="tool-status-card {% if tool_status.get('avahi-resolve', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-broadcast-tower"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">avahi-resolve</div>
+                            <div class="tool-desc">mDNS resolution</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('avahi-resolve', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="tool-status-card {% if tool_status.get('avahi-browse', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-wifi"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">avahi-browse</div>
+                            <div class="tool-desc">Service discovery</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('avahi-browse', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                {% if missing_tools %}
+                    <div class="missing-tools-section">
+                        <h4><i class="fas fa-download"></i> Missing Tools Installation</h4>
+                        <div class="tool-instructions-container">
+                            {% for tool, instructions in missing_tools.items() %}
+                                <div class="missing-tool-card" id="settings-missing-{{ tool }}">
+                                    <div class="missing-tool-header">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <h4>{{ tool }} is not installed</h4>
+                                    </div>
+                                    <div class="missing-tool-content">
+                                        <div class="missing-tool-message">
+                                            <p>This tool is required for proper functioning of Cybex Pulse. {% if tool == 'nmap' %}Security scanning requires nmap for detecting open ports on your devices.{% elif tool == 'arp-scan' %}Network discovery requires arp-scan for finding devices on your local network.{% endif %}</p>
+                                        </div>
+                                        <button class="install-instructions-toggle" onclick="toggleInstructions('settings-{{ tool }}')" type="button">
+                                            <i class="fas fa-terminal"></i> Show Installation Instructions
+                                        </button>
+                                        <div class="install-instructions-content" id="instructions-settings-{{ tool }}">{{ instructions }}</div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-question-circle"></i> About System Tools</h3>
+            </div>
+            <div class="card-body">
+                <p>Cybex Pulse uses several system utilities to provide comprehensive network monitoring and security analysis. Here's what each tool does:</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Network Discovery</h5>
+                        <ul>
+                            <li><strong>arp-scan</strong>: Discovers devices on your local network by sending ARP requests</li>
+                            <li><strong>arp</strong>: Displays and manipulates the system's ARP cache</li>
+                            <li><strong>ip</strong>: Shows network interface information and routing table</li>
+                            <li><strong>getent</strong>: Retrieves entries from name service databases (hosts, networks, etc.)</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Security & Device Information</h5>
+                        <ul>
+                            <li><strong>nmap</strong>: Analyzes open ports and services on network devices</li>
+                            <li><strong>snmpwalk</strong>: Retrieves detailed information from devices that support SNMP</li>
+                            <li><strong>avahi-resolve</strong>: Resolves device hostnames using mDNS</li>
+                            <li><strong>avahi-browse</strong>: Discovers services advertised on your network via mDNS/Bonjour</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> Most of these tools are commonly pre-installed on Linux systems or available through package managers.</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="settings-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save All Settings</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Function to show the selected tab and hide others
+    function showTab(tabId) {
+        // Hide all tab contents
+        var tabContents = document.getElementsByClassName('tab-content');
+        for (var i = 0; i < tabContents.length; i++) {
+            tabContents[i].style.display = 'none';
+        }
+        
+        // Show the selected tab content
+        document.getElementById(tabId).style.display = 'block';
+        
+        // Update active tab styling
+        var tabLinks = document.getElementsByClassName('tab-link');
+        for (var i = 0; i < tabLinks.length; i++) {
+            tabLinks[i].classList.remove('active');
+        }
+        
+        // Add active class to clicked tab
+        var activeTab = document.querySelector('.tab-link[href="#' + tabId + '"]');
+        activeTab.classList.add('active');
+    }
+    
+    // When the page loads, ensure the network tab is active
+    document.addEventListener('DOMContentLoaded', function() {
+        showTab('network');
+    });
+    
+    // Function to toggle installation instructions visibility
+    function toggleInstructions(toolId) {
+        const instructionsEl = document.getElementById('instructions-' + toolId);
+        const buttonEl = instructionsEl.previousElementSibling;
+        
+        instructionsEl.classList.toggle('visible');
+        
+        if (instructionsEl.classList.contains('visible')) {
+            buttonEl.innerHTML = '<i class="fas fa-times"></i> Hide Installation Instructions';
+        } else {
+            buttonEl.innerHTML = '<i class="fas fa-terminal"></i> Show Installation Instructions';
+        }
+    }
+</script>
+{% endblock %}

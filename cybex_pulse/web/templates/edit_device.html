@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Device - Cybex Pulse{% endblock %}
+
+{% block header %}Edit Device{% endblock %}
+
+{% block content %}
+<div class="card edit-device-card">
+    <div class="card-header">
+        <div class="device-header">
+            <div class="device-icon-container">
+                <div class="device-detail-icon">
+                    {{ device.vendor|device_icon(device.hostname)|safe }}
+                </div>
+            </div>
+            <div class="device-title">
+                <h3>{{ device.hostname or device.ip_address }}</h3>
+                <div class="device-meta">
+                    {% if device.last_seen >= now - 300 %}
+                    <span class="badge badge-success">Online</span>
+                    {% else %}
+                    <span class="badge badge-danger">Offline</span>
+                    {% endif %}
+                    
+                    {% if device.is_important %}
+                    <span class="badge badge-warning important-badge">
+                        <i class="fas fa-star"></i> Important Device
+                    </span>
+                    {% endif %}
+                    
+                    <span class="last-seen-badge">
+                        MAC: {{ device.mac_address }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <form method="post" class="edit-device-form">
+        <div class="form-section">
+            <h4 class="form-section-title">Device Information</h4>
+            
+            <div class="form-group">
+                <label for="hostname">Device Name:</label>
+                <input type="text" id="hostname" name="hostname" class="form-control" 
+                       value="{{ device.hostname or '' }}" placeholder="Enter device name">
+                <small class="form-text text-muted">A friendly name to identify this device</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="vendor">Vendor:</label>
+                <input type="text" id="vendor" name="vendor" class="form-control" 
+                       value="{{ device.vendor or '' }}" placeholder="Enter vendor name">
+                <small class="form-text text-muted">The manufacturer or vendor of this device</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Notes:</label>
+                <textarea id="notes" name="notes" class="form-control" rows="4" 
+                         placeholder="Add notes about this device">{{ device.notes or '' }}</textarea>
+                <small class="form-text text-muted">Personal notes about this device</small>
+            </div>
+        </div>
+        
+        {% if fingerprinting_enabled %}
+        <div class="form-section">
+            <h4 class="form-section-title">Fingerprinting Options</h4>
+            
+            <div class="form-group checkbox-group">
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="clear_fingerprint" name="clear_fingerprint">
+                    <label class="custom-control-label" for="clear_fingerprint">
+                        Clear all fingerprint data
+                    </label>
+                    <small class="form-text text-muted">Removes all device identification data</small>
+                </div>
+            </div>
+            
+            <div class="form-group checkbox-group">
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="never_fingerprint" name="never_fingerprint" 
+                           {% if device.never_fingerprint %}checked{% endif %}>
+                    <label class="custom-control-label" for="never_fingerprint">
+                        Never fingerprint this device
+                    </label>
+                    <small class="form-text text-muted">Prevents automatic and manual fingerprinting</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Changes
+            </button>
+            <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    /* Edit device form styles */
+    .edit-device-card {
+        margin-bottom: 24px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-left: 4px solid var(--accent);
+    }
+    
+    .edit-device-form {
+        padding: 20px;
+    }
+    
+    .form-section {
+        background-color: var(--card-bg);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        padding: 0 20px 20px 20px;
+    }
+    
+    .form-section-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-important);
+        padding: 12px 0;
+        margin: 0 0 15px 0;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+    }
+    
+    .form-section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, var(--accent), transparent);
+        margin-left: 15px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--text-important);
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        background-color: var(--lighter-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text);
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
+        outline: none;
+    }
+    
+    textarea.form-control {
+        resize: vertical;
+        min-height: 80px;
+    }
+    
+    .form-text {
+        font-size: 0.8rem;
+        margin-top: 5px;
+        color: var(--text-muted);
+    }
+    
+    .checkbox-group {
+        margin-top: 15px;
+    }
+    
+    .custom-control {
+        position: relative;
+        display: block;
+        min-height: 1.5rem;
+        padding-left: 1.5rem;
+    }
+    
+    .custom-control-input {
+        position: absolute;
+        z-index: -1;
+        opacity: 0;
+    }
+    
+    .custom-control-label {
+        position: relative;
+        margin-bottom: 0;
+        vertical-align: top;
+        cursor: pointer;
+    }
+    
+    .custom-control-label::before {
+        position: absolute;
+        top: 0.25rem;
+        left: -1.5rem;
+        display: block;
+        width: 1rem;
+        height: 1rem;
+        pointer-events: none;
+        content: "";
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 0.25rem;
+    }
+    
+    .custom-control-label::after {
+        position: absolute;
+        top: 0.25rem;
+        left: -1.5rem;
+        display: block;
+        width: 1rem;
+        height: 1rem;
+        content: "";
+        background: no-repeat 50% / 50% 50%;
+    }
+    
+    .custom-control-input:checked ~ .custom-control-label::before {
+        color: #fff;
+        border-color: var(--accent);
+        background-color: var(--accent);
+    }
+    
+    .custom-control-input:checked ~ .custom-control-label::after {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23fff' d='M6.564.75l-3.59 3.612-1.538-1.55L0 4.26 2.974 7.25 8 2.193z'/%3e%3c/svg%3e");
+    }
+    
+    .custom-control-input:focus ~ .custom-control-label::before {
+        box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.25);
+    }
+    
+    .form-actions {
+        display: flex;
+        justify-content: flex-start;
+        gap: 10px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    /* Button styling */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn i {
+        margin-right: 8px;
+    }
+    
+    .btn-primary {
+        background-color: var(--accent);
+        color: #fff;
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--accent-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .btn-secondary {
+        background-color: var(--sidebar-bg);
+        color: var(--text);
+    }
+    
+    .btn-secondary:hover {
+        background-color: var(--sidebar-bg-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Badge styles from device_details.html */
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    .badge-success {
+        background-color: var(--green);
+        color: var(--dark-text);
+    }
+    
+    .badge-danger {
+        background-color: var(--red);
+        color: var(--dark-text);
+    }
+    
+    .badge-warning {
+        background-color: var(--yellow);
+        color: var(--dark-text);
+    }
+    
+    .important-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .last-seen-badge {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        background-color: rgba(0,0,0,0.2);
+        border-radius: 4px;
+    }
+    
+    /* Device header styling from device_details.html */
+    .device-header {
+        display: flex;
+        align-items: center;
+        padding: 5px 0;
+    }
+    
+    .device-icon-container {
+        margin-right: 20px;
+    }
+    
+    .device-detail-icon {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background-color: var(--lighter-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: var(--text);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .device-title {
+        flex: 1;
+    }
+    
+    .device-title h3 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-important);
+    }
+    
+    .device-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .form-section {
+        animation: fadeIn 0.4s ease-out;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add visual confirmation when clearing fingerprint data
+        const clearFingerprintCheckbox = document.getElementById('clear_fingerprint');
+        if (clearFingerprintCheckbox) {
+            clearFingerprintCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    if (!confirm('Are you sure you want to clear all fingerprint data for this device? This cannot be undone.')) {
+                        this.checked = false;
+                    }
+                }
+            });
+        }
+        
+        // Warn when enabling "never fingerprint"
+        const neverFingerprintCheckbox = document.getElementById('never_fingerprint');
+        if (neverFingerprintCheckbox) {
+            const originalState = neverFingerprintCheckbox.checked;
+            neverFingerprintCheckbox.addEventListener('change', function() {
+                if (this.checked && !originalState) {
+                    if (!confirm('Setting this option will prevent this device from being fingerprinted in the future. Continue?')) {
+                        this.checked = false;
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

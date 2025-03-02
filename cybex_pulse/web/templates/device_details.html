@@ -1,0 +1,932 @@
+{% extends "base.html" %}
+
+{% block title %}Device Details - Cybex Pulse{% endblock %}
+
+{% block header %}Device Details{% endblock %}
+
+{% block content %}
+<div class="card device-info-card">
+    <div class="card-header">
+        <div class="device-header">
+            <div class="device-icon-container">
+                <div class="device-detail-icon">
+                    {{ device.vendor|device_icon(device.hostname)|safe }}
+                </div>
+            </div>
+            <div class="device-title">
+                <h3>{{ device.hostname or device.ip_address }}</h3>
+                <div class="device-meta">
+                    {% if device.last_seen >= now - 300 %}
+                    <span class="badge badge-success">Online</span>
+                    {% else %}
+                    <span class="badge badge-danger">Offline</span>
+                    {% endif %}
+                    
+                    {% if device.is_important %}
+                    <span class="badge badge-warning important-badge">
+                        <i class="fas fa-star"></i> Important Device
+                    </span>
+                    {% endif %}
+                    
+                    <span class="last-seen-badge">
+                        Last seen: {{ device.last_seen|timestamp_to_time }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="device-details-container">
+        <!-- Left column: Primary information -->
+        <div class="device-details-left">
+            <div class="detail-section">
+                <h4 class="detail-section-title">Network Information</h4>
+                <div class="detail-row">
+                    <div class="detail-label">IP Address:</div>
+                    <div class="detail-value">{{ device.ip_address }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">MAC Address:</div>
+                    <div class="detail-value">{{ device.mac_address }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Hostname:</div>
+                    <div class="detail-value">{{ device.hostname or 'Unknown' }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Vendor:</div>
+                    <div class="detail-value">{{ device.vendor or 'Unknown' }}</div>
+                </div>
+            </div>
+            
+            {% if device.device_type or device.device_manufacturer or device.device_model %}
+            <div class="detail-section">
+                <h4 class="detail-section-title">Device Information</h4>
+                <div class="detail-row">
+                    <div class="detail-label">Device Type:</div>
+                    <div class="detail-value fingerprint-type">{{ device.device_type or 'Unknown' }}</div>
+                </div>
+                
+                <div class="detail-row">
+                    <div class="detail-label">Manufacturer:</div>
+                    <div class="detail-value fingerprint-manufacturer">{{ device.device_manufacturer or 'Unknown' }}</div>
+                </div>
+                
+                <div class="detail-row">
+                    <div class="detail-label">Model:</div>
+                    <div class="detail-value fingerprint-model">{{ device.device_model or 'Unknown' }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right column: Secondary information -->
+        <div class="device-details-right">
+            <div class="detail-section">
+                <h4 class="detail-section-title">Status Details</h4>
+                <div class="detail-row">
+                    <div class="detail-label">First Seen:</div>
+                    <div class="detail-value">{{ device.first_seen|timestamp_to_time }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Last Seen:</div>
+                    <div class="detail-value">{{ device.last_seen|timestamp_to_time }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Important Device:</div>
+                    <div class="detail-value">
+                        {% if device.is_important %}
+                        <span class="status-badge-online">Yes</span>
+                        {% else %}
+                        <span class="status-badge-offline">No</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Notes:</div>
+                    <div class="detail-value">{{ device.notes or 'No notes' }}</div>
+                </div>
+                {% if device.never_fingerprint %}
+                <div class="detail-row">
+                    <div class="detail-label">Fingerprinting:</div>
+                    <div class="detail-value">
+                        <span class="status-badge-offline">Disabled for this device</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if device.device_type or device.fingerprint_confidence or device.fingerprint_date %}
+            <div class="detail-section">
+                <h4 class="detail-section-title">Fingerprinting Data</h4>
+                
+                {% if device.fingerprint_confidence %}
+                <div class="detail-row">
+                    <div class="detail-label">Confidence:</div>
+                    <div class="detail-value">
+                        <div class="confidence-meter" style="--confidence: {{ device.fingerprint_confidence * 100 }}%;">
+                            <div class="confidence-value">{{ (device.fingerprint_confidence * 100)|int }}%</div>
+                            <div class="confidence-bar"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if device.fingerprint_date %}
+                <div class="detail-row">
+                    <div class="detail-label">Last Scan:</div>
+                    <div class="detail-value">{{ device.fingerprint_date|timestamp_to_time }}</div>
+                </div>
+                {% else %}
+                {% if device.device_type %}
+                <div class="detail-row">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value"><span class="no-fingerprint">Not recently fingerprinted</span></div>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card-actions">
+        <div class="action-buttons">
+            <form method="post" action="{{ url_for('mark_device_important', mac_address=device.mac_address) }}">
+                {% if device.is_important %}
+                <input type="hidden" name="important" value="false">
+                <button type="submit" class="btn btn-secondary">
+                    <i class="fas fa-star"></i> Remove from Important Devices
+                </button>
+                {% else %}
+                <input type="hidden" name="important" value="true">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-star"></i> Mark as Important Device
+                </button>
+                {% endif %}
+            </form>
+            
+            <a href="{{ url_for('edit_device', mac_address=device.mac_address) }}" class="btn btn-edit">
+                <i class="fas fa-edit"></i> Edit Device
+            </a>
+            
+            {% if fingerprinting_enabled and not device.never_fingerprint %}
+            <form method="post" action="{{ url_for('fingerprint_device', mac_address=device.mac_address) }}">
+                <button type="submit" class="btn btn-fingerprint">
+                    <i class="fas fa-fingerprint"></i> Fingerprint Device
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if security_scans %}
+<div class="card security-scans-card">
+    <div class="card-header">
+        <h3>Security Scans <span class="scan-count">{{ security_scans|length }} scans</span></h3>
+    </div>
+    <table class="security-scan-table">
+        <thead>
+            <tr>
+                <th width="20%">Date</th>
+                <th width="50%">Open Ports</th>
+                <th width="30%">Vulnerabilities</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scan in security_scans %}
+            <tr class="scan-row">
+                <td class="scan-date">{{ scan.timestamp|timestamp_to_time }}</td>
+                <td>
+                    {% if scan.open_ports %}
+                    <div class="port-tags-container">
+                        {% for port in scan.open_ports|from_json %}
+                        <a href="http://{{ device.ip_address }}:{{ port.port }}" target="_blank" class="port-tag" data-port="{{ port.port }}" data-protocol="{{ port.protocol }}" data-service="{{ port.service }}">
+                            <span class="port-number">{{ port.port }}</span>
+                            <span class="port-protocol">{{ port.protocol }}</span>
+                            <span class="port-service">{{ port.service }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="no-ports">No open ports detected</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if scan.vulnerabilities %}
+                    <ul class="vuln-list">
+                        {% for vuln in scan.vulnerabilities|from_json %}
+                        <li>{{ vuln.name }}: {{ vuln.severity }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    No vulnerabilities detected
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card events-card">
+    <div class="card-header">
+        <h3>Device Events <button id="refresh-events" class="btn btn-sm btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button></h3>
+    </div>
+    <table id="device-events" class="events-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr class="event-row" data-severity="{{ event.severity }}">
+                <td class="event-time">{{ event.timestamp|timestamp_to_time }}</td>
+                <td>
+                    {% if event.severity == 'error' %}
+                    <span class="badge badge-danger">{{ event.event_type }}</span>
+                    {% elif event.severity == 'warning' %}
+                    <span class="badge badge-warning">{{ event.event_type }}</span>
+                    {% else %}
+                    <span class="badge badge-info">{{ event.event_type }}</span>
+                    {% endif %}
+                </td>
+                <td class="event-message message-column">{{ event.message }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3" class="no-events">No events for this device</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    /* Core device details styles */
+    .device-info-card {
+        margin-bottom: 24px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-left: 4px solid var(--accent);
+    }
+    
+    .device-details-container {
+        display: flex;
+        padding: 20px;
+        gap: 24px;
+        animation: fadeIn 0.4s ease-out;
+    }
+    
+    .device-details-left, 
+    .device-details-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .device-header {
+        display: flex;
+        align-items: center;
+        padding: 5px 0;
+    }
+    
+    .device-icon-container {
+        margin-right: 20px;
+    }
+    
+    .device-detail-icon {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background-color: var(--lighter-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: var(--text);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+    }
+
+    .device-detail-icon:hover {
+        transform: scale(1.1);
+        background-color: var(--accent);
+        color: var(--text-important);
+    }
+    
+    .device-title {
+        flex: 1;
+    }
+    
+    .device-title h3 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-important);
+    }
+    
+    .device-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .important-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        animation: pulse-star 3s infinite;
+    }
+    
+    @keyframes pulse-star {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .last-seen-badge {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        background-color: rgba(0,0,0,0.2);
+        border-radius: 4px;
+    }
+    
+    .detail-row {
+        display: flex;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 10px;
+        transition: all 0.2s ease;
+        background-color: var(--card-bg);
+        padding: 12px;
+        border-radius: 6px;
+    }
+    
+    .detail-row:hover {
+        background-color: var(--lighter-bg);
+        transform: translateX(5px);
+    }
+    
+    .detail-label {
+        width: 150px;
+        font-weight: bold;
+        color: var(--text-muted);
+    }
+    
+    .detail-value {
+        flex: 1;
+    }
+    
+    .status-badge-online {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background-color: rgba(76, 175, 80, 0.15);
+        color: var(--green);
+        font-weight: 500;
+    }
+    
+    .status-badge-offline {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background-color: rgba(217, 58, 58, 0.15);
+        color: var(--red);
+        font-weight: 500;
+    }
+    
+    .card-actions {
+        padding: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .action-buttons .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .action-buttons .btn i {
+        margin-right: 8px;
+    }
+    
+    .action-buttons .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .btn-edit {
+        background-color: #3498db;
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-edit:hover {
+        background-color: #2980b9;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .btn-edit i {
+        margin-right: 8px;
+    }
+    
+    /* Port tags styling */
+    .port-tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 5px 0;
+    }
+    
+    .port-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background-color: var(--lighter-bg);
+        color: var(--text);
+        border: 1px solid var(--border-color);
+        font-size: 0.9rem;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .port-tag:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        color: var(--text-important);
+        background-color: var(--accent);
+    }
+    
+    .port-tag:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(45deg, rgba(255,255,255,0.1), transparent);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .port-tag:hover:before {
+        opacity: 1;
+    }
+    
+    .port-number {
+        font-weight: bold;
+    }
+    
+    .port-protocol {
+        margin-left: 5px;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+    
+    .port-tag:hover .port-protocol {
+        color: var(--text-important);
+    }
+    
+    .port-service {
+        margin-left: 8px;
+        padding-left: 8px;
+        border-left: 1px solid var(--border-color);
+    }
+    
+    .port-tag:hover .port-service {
+        border-left-color: rgba(255,255,255,0.3);
+    }
+    
+    /* Port tag service-specific colors */
+    .port-tag[data-service="http"], .port-tag[data-service="https"] {
+        border-left: 3px solid var(--green);
+    }
+    
+    .port-tag[data-service="ssh"] {
+        border-left: 3px solid var(--highlight-blue);
+    }
+    
+    .port-tag[data-service="dns"] {
+        border-left: 3px solid var(--orange);
+    }
+    
+    .port-tag[data-service="ftp"] {
+        border-left: 3px solid var(--yellow);
+    }
+    
+    .port-tag[data-service="smtp"], .port-tag[data-service="pop3"], .port-tag[data-service="imap"] {
+        border-left: 3px solid var(--accent);
+    }
+    
+    .port-tag[data-port="443"] {
+        background-color: rgba(76, 175, 80, 0.15);
+    }
+    
+    .port-tag[data-port="22"] {
+        background-color: rgba(58, 133, 217, 0.15);
+    }
+    
+    .port-tag[data-port="53"] {
+        background-color: rgba(255, 152, 0, 0.15);
+    }
+    
+    .no-ports {
+        color: var(--text-muted);
+        font-style: italic;
+    }
+    
+    .vuln-list {
+        margin: 0;
+        padding-left: 20px;
+    }
+    
+    /* Badge styles */
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    .badge-success {
+        background-color: var(--green);
+        color: var(--dark-text);
+    }
+    
+    .badge-danger {
+        background-color: var(--red);
+        color: var(--dark-text);
+    }
+    
+    .badge-warning {
+        background-color: var(--yellow);
+        color: var(--dark-text);
+    }
+    
+    .badge-info {
+        background-color: var(--highlight-blue);
+        color: var(--dark-text);
+    }
+    
+    .badge-primary {
+        background-color: var(--accent);
+        color: var(--dark-text);
+    }
+    
+    .badge-secondary {
+        background-color: var(--lighter-bg);
+        color: var(--text);
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Event styles */
+    .event-row {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .event-row:hover {
+        background-color: var(--lighter-bg);
+    }
+    
+    .event-row[data-severity="error"] {
+        border-left: 4px solid var(--red);
+    }
+    
+    .event-row[data-severity="warning"] {
+        border-left: 4px solid var(--yellow);
+    }
+    
+    .event-row[data-severity="info"] {
+        border-left: 4px solid var(--highlight-blue);
+    }
+    
+    .event-time {
+        white-space: nowrap;
+        font-family: monospace;
+        color: var(--text-muted);
+    }
+    
+    .event-message {
+        line-height: 1.5;
+    }
+    
+    .no-events {
+        text-align: center;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 20px;
+    }
+    
+    /* Table enhancements */
+    #device-events tbody tr:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        z-index: 1;
+        transform: scale(1.01);
+    }
+    
+    /* Table styling */
+    table {
+        animation: fadeIn 0.5s ease-out;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    
+    /* Fingerprinting styles */
+    /* Detail section styling */
+    .detail-section {
+        background-color: var(--card-bg);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .detail-section-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-important);
+        padding: 12px 16px;
+        margin: 0;
+        background-color: var(--sidebar-bg);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+    }
+    
+    .detail-section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, var(--accent), transparent);
+        margin-left: 15px;
+    }
+    
+    .detail-section .detail-row {
+        margin: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+    }
+    
+    .detail-section .detail-row:last-child {
+        border-bottom: none;
+    }
+    
+    /* Fingerprint styling */
+    
+    .fingerprint-type,
+    .fingerprint-manufacturer,
+    .fingerprint-model {
+        font-weight: 500;
+        color: var(--text-important);
+    }
+    
+    .confidence-meter {
+        width: 100%;
+        height: 20px;
+        background-color: var(--surface1);
+        border-radius: 10px;
+        position: relative;
+        overflow: hidden;
+        margin-top: 5px;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    .confidence-bar {
+        height: 100%;
+        width: var(--confidence);
+        background: linear-gradient(to right, var(--green), var(--mauve));
+        border-radius: 10px;
+        transition: width 0.5s ease-in-out;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
+    .confidence-value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-weight: bold;
+        color: var(--text-important);
+        z-index: 1;
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        font-size: 0.8rem;
+    }
+    
+    .no-fingerprint {
+        color: var(--text-muted);
+        font-style: italic;
+    }
+    
+    table th {
+        font-weight: 600;
+        border-bottom: 2px solid var(--border-color);
+        background-color: var(--sidebar-bg);
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .card-header {
+        padding-bottom: 1rem;
+    }
+    
+    .card-header h3 {
+        display: flex;
+        align-items: center;
+    }
+    
+    .card-header h3::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, var(--accent), transparent);
+        margin-left: 15px;
+    }
+    
+    .security-scans-card, 
+    .events-card {
+        margin-bottom: 24px;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .security-scan-table .scan-date {
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+    
+    .scan-row {
+        transition: all 0.3s ease;
+    }
+    
+    .scan-row:hover {
+        background-color: var(--lighter-bg);
+    }
+    
+    .scan-count {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-weight: normal;
+        margin-left: 10px;
+    }
+    
+    /* Responsive fixes */
+    @media (max-width: 768px) {
+        .device-details-container {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Enhance port tags with port info tooltips
+        const portTags = document.querySelectorAll('.port-tag');
+        
+        portTags.forEach(tag => {
+            const port = tag.dataset.port;
+            const service = tag.dataset.service;
+            const protocol = tag.dataset.protocol;
+            
+            // Fix URLs for specific services
+            if (service === 'https') {
+                tag.href = `https://${tag.href.split('://')[1]}`;
+            } else if (service === 'ssh') {
+                tag.href = 'javascript:void(0)';
+                tag.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    alert(`To connect via SSH, use your terminal:\n\nssh user@${tag.href.split('://')[1].split(':')[0]}`);
+                });
+            } else if (service === 'dns') {
+                tag.href = 'javascript:void(0)';
+                tag.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    alert(`To query this DNS server, use:\n\nnslookup example.com ${tag.href.split('://')[1].split(':')[0]}`);
+                });
+            }
+            
+            // Add port information tooltips
+            const portInfo = getPortInfo(port, service);
+            if (portInfo) {
+                tag.title = portInfo;
+            }
+        });
+        
+        // Port information helper
+        function getPortInfo(port, service) {
+            const portInfoMap = {
+                '21': 'FTP - File Transfer Protocol for uploading files',
+                '22': 'SSH - Secure Shell for remote login and command execution',
+                '23': 'Telnet - Insecure remote login protocol',
+                '25': 'SMTP - Simple Mail Transfer Protocol for sending emails',
+                '53': 'DNS - Domain Name System for resolving hostnames',
+                '80': 'HTTP - HyperText Transfer Protocol for websites',
+                '110': 'POP3 - Post Office Protocol for retrieving emails',
+                '143': 'IMAP - Internet Message Access Protocol for email',
+                '443': 'HTTPS - Secure HTTP for encrypted websites',
+                '445': 'SMB - Server Message Block for file sharing',
+                '3306': 'MySQL - Database server',
+                '3389': 'RDP - Remote Desktop Protocol',
+                '5432': 'PostgreSQL - Database server',
+                '8080': 'HTTP Alternate - Often used for web proxies and dev servers',
+                '8443': 'HTTPS Alternate - Secure web on alternate port'
+            };
+            
+            return portInfoMap[port] || `${service.toUpperCase()} - Port ${port}`;
+        }
+        
+        // Add refresh events functionality
+        const refreshButton = document.getElementById('refresh-events');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', function() {
+                // Add spinning animation to refresh button
+                this.classList.add('rotating');
+                
+                // Simulate refresh (in real app, this would be an AJAX call)
+                setTimeout(() => {
+                    // Remove spinning animation
+                    this.classList.remove('rotating');
+                    
+                    // Flash the events table to indicate refresh
+                    const eventsTable = document.getElementById('device-events');
+                    eventsTable.classList.add('table-refreshed');
+                    setTimeout(() => {
+                        eventsTable.classList.remove('table-refreshed');
+                    }, 500);
+                    
+                }, 800);
+            });
+        }
+    });
+    
+    // Add CSS animation for refresh button
+    document.head.insertAdjacentHTML('beforeend', `
+        <style>
+            @keyframes rotating {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            
+            .rotating i {
+                animation: rotating 0.8s linear infinite;
+            }
+            
+            @keyframes flash {
+                0% { background-color: transparent; }
+                50% { background-color: rgba(217, 58, 58, 0.1); }
+                100% { background-color: transparent; }
+            }
+            
+            .table-refreshed tbody tr {
+                animation: flash 0.5s ease-out;
+            }
+        </style>
+    `);
+</script>
+{% endblock %}

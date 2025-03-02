@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}About - Cybex Pulse{% endblock %}
+
+{% block header %}About{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>About Cybex Pulse</h3>
+    </div>
+    <div class="card-body">
+        <div class="about-content">
+            <h4>Version {{ version }}</h4>
+            <p>Cybex Pulse is a home network monitoring system designed to provide real-time insights into your network's devices, performance, and security.</p>
+            
+            <h4>Features</h4>
+            <ul>
+                <li>Real-time device tracking and monitoring</li>
+                <li>Network security scanning</li>
+                <li>Device fingerprinting and identification</li>
+                <li>Internet health monitoring</li>
+                <li>Website availability checking</li>
+                <li>Customizable alerts and notifications</li>
+            </ul>
+            
+            <h4>How It Works</h4>
+            <p>Cybex Pulse performs regular network scans to discover devices on your home network. It uses advanced fingerprinting techniques to identify device types, manufacturers, and models. The system monitors network performance, runs security checks, and provides alerts when anomalies are detected.</p>
+            
+            <h4>Third-Party Tools & Libraries</h4>
+            <p>Cybex Pulse is built with the help of these excellent open-source projects:</p>
+            <div class="credits-section">
+                <div class="credits-column">
+                    <h5>Web & Framework</h5>
+                    <ul>
+                        <li><a href="https://flask.palletsprojects.com/" target="_blank">Flask</a> - Web framework</li>
+                        <li><a href="https://werkzeug.palletsprojects.com/" target="_blank">Werkzeug</a> - WSGI utility library</li>
+                    </ul>
+                    
+                    <h5>Database</h5>
+                    <ul>
+                        <li><a href="https://www.sqlite.org/" target="_blank">SQLite3</a> - Database engine</li>
+                    </ul>
+                </div>
+                
+                <div class="credits-column">
+                    <h5>Network & Device Scanning</h5>
+                    <ul>
+                        <li><a href="https://nmap.org/" target="_blank">Nmap</a> - Network scanning tool</li>
+                        <li><a href="https://pypi.org/project/python-nmap/" target="_blank">Python-nmap</a> - Nmap Python interface</li>
+                        <li><a href="https://github.com/royhills/arp-scan" target="_blank">arp-scan</a> - Network scanning tool</li>
+                        <li><a href="https://avahi.org/" target="_blank">Avahi Tools</a> - mDNS service discovery</li>
+                        <li><a href="http://www.net-snmp.org/" target="_blank">SNMP Tools</a> - SNMP scanning utilities</li>
+                    </ul>
+                </div>
+                
+                <div class="credits-column">
+                    <h5>Communication & Integration</h5>
+                    <ul>
+                        <li><a href="https://python-telegram-bot.org/" target="_blank">Python-Telegram-Bot</a> - Telegram API wrapper</li>
+                        <li><a href="https://requests.readthedocs.io/" target="_blank">Requests</a> - HTTP client library</li>
+                        <li><a href="https://urllib3.readthedocs.io/" target="_blank">urllib3</a> - HTTP client library</li>
+                    </ul>
+                    
+                    <h5>Testing & Monitoring</h5>
+                    <ul>
+                        <li><a href="https://github.com/sivel/speedtest-cli" target="_blank">Speedtest-cli</a> - Internet speed testing</li>
+                    </ul>
+                </div>
+                
+                <div class="credits-column">
+                    <h5>User Interface</h5>
+                    <ul>
+                        <li><a href="https://simpleicons.org/" target="_blank">Simple-Icons</a> - Icon library</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h4>Open Source</h4>
+            <p>Cybex Pulse is an open source project. Contributions, bug reports, and feature requests are welcome.</p>
+            
+            <h4>License</h4>
+            <p>This software is distributed under the terms of the MIT License.</p>
+            
+            <h4>Contact</h4>
+            <p>For support, feedback, or inquiries, please visit our <a href="https://github.com/cybex-pulse/cybex-pulse" target="_blank">GitHub repository</a>.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .about-content {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .about-content h4 {
+        color: var(--accent);
+        margin-top: 20px;
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+    
+    .about-content p {
+        margin-bottom: 15px;
+        line-height: 1.6;
+    }
+    
+    .about-content ul {
+        padding-left: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .about-content li {
+        margin-bottom: 5px;
+        line-height: 1.6;
+    }
+    
+    .about-content a {
+        color: var(--accent);
+        text-decoration: none;
+    }
+    
+    .about-content a:hover {
+        text-decoration: underline;
+    }
+    
+    .credits-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 10px;
+    }
+    
+    .credits-column {
+        flex: 1 1 250px;
+        margin-bottom: 15px;
+    }
+    
+    .credits-column h5 {
+        color: var(--accent);
+        font-weight: 600;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(var(--accent-rgb), 0.3);
+    }
+    
+    .credits-column ul {
+        list-style-type: none;
+        padding-left: 0;
+    }
+    
+    .credits-column li {
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    
+    .credits-column a {
+        font-weight: 500;
+    }
+    
+    @media (max-width: 768px) {
+        .credits-section {
+            flex-direction: column;
+        }
+        .credits-column {
+            flex: 1 1 100%;
+        }
+    }
+</style>
+{% endblock %}

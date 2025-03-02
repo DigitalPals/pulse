@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Cybex Pulse{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- Custom styles for overrides -->
+    <style>
+        /* Apply additional styling for specific elements if needed */
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Cybex Pulse" class="logo">
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="{% if request.path == url_for('dashboard') %}active{% endif %}">
+                        <a href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt"></i>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="{% if request.path == url_for('devices') %}active{% endif %}">
+                        <a href="{{ url_for('devices') }}">
+                            <i class="fas fa-network-wired"></i>
+                            Devices
+                        </a>
+                    </li>
+                    <li class="{% if request.path == url_for('events') %}active{% endif %}">
+                        <a href="{{ url_for('events') }}">
+                            <i class="fas fa-bell"></i>
+                            Events
+                        </a>
+                    </li>
+                    {% if config_obj.config.get("monitoring", {}).get("internet_health", {}).get("enabled", False) %}
+                    <li class="{% if request.path == url_for('speed_tests') %}active{% endif %}">
+                        <a href="{{ url_for('speed_tests') }}">
+                            <i class="fas fa-heartbeat"></i>
+                            Internet Health
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if config_obj.config.get("monitoring", {}).get("websites", {}).get("enabled", False) %}
+                    <li class="{% if request.path == url_for('websites') %}active{% endif %}">
+                        <a href="{{ url_for('websites') }}">
+                            <i class="fas fa-globe"></i>
+                            Websites
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if config_obj.config.get("monitoring", {}).get("security", {}).get("enabled", False) %}
+                    <li class="{% if request.path == url_for('network_security') %}active{% endif %}">
+                        <a href="{{ url_for('network_security') }}">
+                            <i class="fas fa-shield-alt"></i>
+                            Network Security
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if config_obj.config.get("fingerprinting", {}).get("enabled", False) %}
+                    <li class="{% if request.path == url_for('fingerprinting') %}active{% endif %}">
+                        <a href="{{ url_for('fingerprinting') }}">
+                            <i class="fas fa-fingerprint"></i>
+                            Device Fingerprinting
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="{% if request.path == url_for('settings') %}active{% endif %}">
+                        <a href="{{ url_for('settings') }}">
+                            <i class="fas fa-cog"></i>
+                            Settings
+                        </a>
+                    </li>
+                    <li class="{% if request.path == url_for('about') %}active{% endif %}">
+                        <a href="{{ url_for('about') }}">
+                            <i class="fas fa-info-circle"></i>
+                            About
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </a>
+                    </li>
+                </ul>
+                <div class="sidebar-footer">
+                    <small>© Cybex Pulse v{{ version }}</small>
+                </div>
+            </nav>
+        </div>
+        <div class="main-content">
+            <div class="header">
+                <h2>{% block header %}{% endblock %}</h2>
+                <div class="header-actions">
+                    {% block header_actions %}{% endblock %}
+                </div>
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category else 'warning' }}">
+                            <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'danger' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <!-- Dropdown menu handling -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle dropdown toggles
+            const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+            
+            dropdownToggles.forEach(toggle => {
+                toggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const menu = this.nextElementSibling;
+                    menu.classList.toggle('show');
+                    
+                    // Close other open dropdowns
+                    document.querySelectorAll('.dropdown-menu.show').forEach(openMenu => {
+                        if (openMenu !== menu) {
+                            openMenu.classList.remove('show');
+                        }
+                    });
+                });
+            });
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+                        menu.classList.remove('show');
+                    });
+                }
+            });
+            
+            // Handle tabs if present
+            const tabItems = document.querySelectorAll('.tab-item');
+            
+            tabItems.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs
+                    document.querySelectorAll('.tab-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Hide all content
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Show relevant content
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}Events - Cybex Pulse{% endblock %}
+
+{% block header %}Event Log{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Event Filters</h3>
+    </div>
+    <div class="card-body">
+        <form id="filter-form" method="get" action="{{ url_for('events') }}">
+            <div class="filter-row">
+                <div class="form-group">
+                    <label for="event-type">Event Type</label>
+                    <select id="event-type" name="type" class="form-control">
+                        <option value="">All Types</option>
+                        <option value="device_detected" {% if request.args.get('type') == 'device_detected' %}selected{% endif %}>Device Detected</option>
+                        <option value="device_offline" {% if request.args.get('type') == 'device_offline' %}selected{% endif %}>Device Offline</option>
+                        <option value="device_fingerprinted" {% if request.args.get('type') == 'device_fingerprinted' %}selected{% endif %}>Device Fingerprinted</option>
+                        <option value="alert" {% if request.args.get('type') == 'alert' %}selected{% endif %}>Alert</option>
+                        <option value="speed_test" {% if request.args.get('type') == 'speed_test' %}selected{% endif %}>Speed Test</option>
+                        <option value="website_check" {% if request.args.get('type') == 'website_check' %}selected{% endif %}>Website Check</option>
+                        <option value="security_scan" {% if request.args.get('type') == 'security_scan' %}selected{% endif %}>Security Scan</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="severity">Severity</label>
+                    <select id="severity" name="severity" class="form-control">
+                        <option value="">All Severities</option>
+                        <option value="info" {% if request.args.get('severity') == 'info' %}selected{% endif %}>Info</option>
+                        <option value="warning" {% if request.args.get('severity') == 'warning' %}selected{% endif %}>Warning</option>
+                        <option value="error" {% if request.args.get('severity') == 'error' %}selected{% endif %}>Error</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="limit">Limit</label>
+                    <select id="limit" name="limit" class="form-control">
+                        <option value="100" {% if request.args.get('limit') == '100' or not request.args.get('limit') %}selected{% endif %}>100</option>
+                        <option value="250" {% if request.args.get('limit') == '250' %}selected{% endif %}>250</option>
+                        <option value="500" {% if request.args.get('limit') == '500' %}selected{% endif %}>500</option>
+                        <option value="1000" {% if request.args.get('limit') == '1000' %}selected{% endif %}>1000</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Events</h3>
+        <span id="last-updated">Last updated: <span id="update-time">{{ now }}</span></span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Message</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody id="events-table">
+            {% for event in events %}
+            <tr>
+                <td>{{ event.timestamp|timestamp_to_time }}</td>
+                <td>{{ event.event_type }}</td>
+                <td>
+                    {% if event.severity == 'error' %}
+                    <span class="badge badge-danger">{{ event.severity }}</span>
+                    {% elif event.severity == 'warning' %}
+                    <span class="badge badge-warning">{{ event.severity }}</span>
+                    {% else %}
+                    <span class="badge badge-info">{{ event.severity }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.details %}
+                        {% set details = event.details|from_json %}
+                        {% if details.mac %}
+                            {% if 'Device went offline:' in event.message %}
+                                Device went offline: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname }}</a> ({{ details.ip }})
+                            {% elif 'Device detected:' in event.message or 'New device detected:' in event.message %}
+                                {{ event.message.split(':')[0] }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname or details.ip }}</a> ({{ details.ip }})
+                            {% elif 'Device fingerprinted:' in event.message or 'Device identified:' in event.message or 'Device identified from vendor:' in event.message %}
+                                {% set msg_type = event.message.split(':')[0] %}
+                                {% set device_name = details.hostname %}
+                                {% if details.manufacturer and details.model %}
+                                    {% set device_name = details.manufacturer + ' ' + details.model %}
+                                {% endif %}
+                                {{ msg_type }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ device_name or details.ip }}</a> ({{ details.ip }})
+                            {% else %}
+                                {{ event.message }}
+                            {% endif %}
+                        {% else %}
+                            {{ event.message }}
+                        {% endif %}
+                    {% else %}
+                        {{ event.message }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.details %}
+                    <button class="btn btn-secondary btn-sm toggle-details" data-details="{{ event.details }}">Show Details</button>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% if event.details %}
+            <tr class="details-row" style="display: none;">
+                <td colspan="5">
+                    <pre class="details-content">{{ event.details }}</pre>
+                </td>
+            </tr>
+            {% endif %}
+            {% else %}
+            <tr>
+                <td colspan="5">No events found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Details Modal -->
+<div id="details-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Event Details</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <pre id="modal-details"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Function to format timestamps
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    }
+
+    // Update the "last updated" time
+    function updateLastUpdated() {
+        document.getElementById('update-time').textContent = new Date().toLocaleString();
+    }
+    
+    // Call immediately and then every minute
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 60000);
+    
+    // Toggle details row
+    document.querySelectorAll('.toggle-details').forEach(button => {
+        button.addEventListener('click', function() {
+            const detailsRow = this.closest('tr').nextElementSibling;
+            if (detailsRow && detailsRow.classList.contains('details-row')) {
+                if (detailsRow.style.display === 'none') {
+                    detailsRow.style.display = 'table-row';
+                    this.textContent = 'Hide Details';
+                } else {
+                    detailsRow.style.display = 'none';
+                    this.textContent = 'Show Details';
+                }
+            } else {
+                // Show modal with details
+                const modal = document.getElementById('details-modal');
+                const modalDetails = document.getElementById('modal-details');
+                modalDetails.textContent = this.getAttribute('data-details');
+                modal.style.display = 'block';
+            }
+        });
+    });
+    
+    // Close modal when clicking the close button
+    document.querySelector('.close').addEventListener('click', function() {
+        document.getElementById('details-modal').style.display = 'none';
+    });
+    
+    // Close modal when clicking outside the modal content
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('details-modal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    // Function to refresh events data
+    function refreshEvents() {
+        // Get current filter values
+        const eventType = document.getElementById('event-type').value;
+        const severity = document.getElementById('severity').value;
+        const limit = document.getElementById('limit').value;
+        
+        // Build query string
+        let queryParams = new URLSearchParams();
+        if (eventType) queryParams.append('type', eventType);
+        if (severity) queryParams.append('severity', severity);
+        queryParams.append('limit', limit);
+        
+        // Fetch events with filters
+        fetch(`{{ url_for('api_events') }}?${queryParams.toString()}`)
+            .then(response => response.json())
+            .then(events => {
+                const eventsTable = document.getElementById('events-table');
+                if (events.length > 0) {
+                    let html = '';
+                    events.forEach(event => {
+                        let badgeClass = 'badge-info';
+                        if (event.severity === 'error') {
+                            badgeClass = 'badge-danger';
+                        } else if (event.severity === 'warning') {
+                            badgeClass = 'badge-warning';
+                        }
+                        
+                        html += `
+                            <tr>
+                                <td>${formatTimestamp(event.timestamp)}</td>
+                                <td>${event.event_type}</td>
+                                <td><span class="badge ${badgeClass}">${event.severity}</span></td>
+                                <td>${formatEventMessage(event)}</td>
+                                <td>
+                                    ${event.details ? 
+                                    `<button class="btn btn-secondary btn-sm toggle-details" data-details="${event.details}">Show Details</button>` : 
+                                    '-'}
+                                </td>
+                            </tr>
+                        `;
+                        
+                        if (event.details) {
+                            html += `
+                                <tr class="details-row" style="display: none;">
+                                    <td colspan="5">
+                                        <pre class="details-content">${event.details}</pre>
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                    });
+                    eventsTable.innerHTML = html;
+                    
+                    // Re-attach event listeners to new buttons
+                    document.querySelectorAll('.toggle-details').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const detailsRow = this.closest('tr').nextElementSibling;
+                            if (detailsRow && detailsRow.classList.contains('details-row')) {
+                                if (detailsRow.style.display === 'none') {
+                                    detailsRow.style.display = 'table-row';
+                                    this.textContent = 'Hide Details';
+                                } else {
+                                    detailsRow.style.display = 'none';
+                                    this.textContent = 'Show Details';
+                                }
+                            } else {
+                                // Show modal with details
+                                const modal = document.getElementById('details-modal');
+                                const modalDetails = document.getElementById('modal-details');
+                                modalDetails.textContent = this.getAttribute('data-details');
+                                modal.style.display = 'block';
+                            }
+                        });
+                    });
+                } else {
+                    eventsTable.innerHTML = '<tr><td colspan="5">No events found</td></tr>';
+                }
+                
+                // Update last updated time
+                updateLastUpdated();
+            })
+            .catch(error => console.error('Error fetching events:', error));
+    }
+    
+    // Function to format event messages and create links to device details
+    function formatEventMessage(event) {
+        // If event has details, parse it
+        if (event.details) {
+            try {
+                const details = JSON.parse(event.details);
+                if (details.mac) {
+                    if (event.message.includes('Device went offline:')) {
+                        return `Device went offline: <a href="/devices/${details.mac}" class="device-name">${details.hostname}</a> (${details.ip})`;
+                    } else if (event.message.includes('Device detected:') || event.message.includes('New device detected:')) {
+                        const prefix = event.message.split(':')[0];
+                        return `${prefix}: <a href="/devices/${details.mac}" class="device-name">${details.hostname || details.ip}</a> (${details.ip})`;
+                    } else if (event.message.includes('Device fingerprinted:') || event.message.includes('Device identified:') || event.message.includes('Device identified from vendor:')) {
+                        const msgType = event.message.split(':')[0];
+                        let deviceName = details.hostname || '';
+                        if (details.manufacturer && details.model) {
+                            deviceName = `${details.manufacturer} ${details.model}`;
+                        }
+                        return `${msgType}: <a href="/devices/${details.mac}" class="device-name">${deviceName || details.ip}</a> (${details.ip})`;
+                    }
+                }
+            } catch(e) {
+                console.error('Error parsing event details:', e);
+            }
+        }
+        
+        // Default formatting if no special case applies
+        return event.message;
+    }
+    
+    // Refresh events every 30 seconds
+    setInterval(refreshEvents, 30000);
+</script>
+
+<style>
+    .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .filter-row .form-group {
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .details-content {
+        background-color: var(--lighter-bg);
+        padding: 10px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 13px;
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+    }
+    
+    /* Modal styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    .modal-content {
+        background-color: var(--card-bg);
+        margin: 10% auto;
+        padding: 0;
+        border-radius: 6px;
+        width: 80%;
+        max-width: 800px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-color);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        color: var(--text-important);
+        font-size: 18px;
+        font-weight: 600;
+        position: relative;
+        padding-left: 12px;
+    }
+    
+    .modal-header h3::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 4px;
+        background-color: var(--accent);
+        border-radius: 2px;
+    }
+    
+    .close {
+        color: var(--text-muted);
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close:hover {
+        color: var(--text);
+    }
+    
+    .modal-body {
+        padding: 20px;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    #modal-details {
+        background-color: var(--lighter-bg);
+        padding: 15px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 13px;
+        margin: 0;
+        border: 1px solid var(--border-color);
+    }
+    
+    .device-name {
+        font-weight: 600;
+        color: var(--accent);
+    }
+    
+    a.device-name {
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    
+    a.device-name:hover {
+        color: var(--accent-dark);
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}

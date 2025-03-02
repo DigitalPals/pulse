@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Cybex Pulse{% endblock %}
+
+{% block header %}Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+{% if missing_tools %}
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-tools"></i> Missing Required Tools</h3>
+    </div>
+    <div class="card-content">
+        <p class="card-intro">The following tools need to be installed for full functionality:</p>
+        {% for tool, instructions in missing_tools.items() %}
+            <div class="missing-tool-card" id="missing-{{ tool }}">
+                <div class="missing-tool-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h4>{{ tool }} is not installed</h4>
+                </div>
+                <div class="missing-tool-content">
+                    <div class="missing-tool-message">
+                        <p>This tool is required for proper functioning of Cybex Pulse. {% if tool == 'nmap' %}Security scanning requires nmap for detecting open ports on your devices.{% elif tool == 'arp-scan' %}Network discovery requires arp-scan for finding devices on your local network.{% endif %}</p>
+                    </div>
+                    <button class="install-instructions-toggle" onclick="toggleInstructions('{{ tool }}')" type="button">
+                        <i class="fas fa-terminal"></i> Show Installation Instructions
+                    </button>
+                    <div class="install-instructions-content" id="instructions-{{ tool }}">{{ instructions }}</div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h3>Network Overview</h3>
+        <span id="last-updated">Last updated: <span id="update-time-text" class="update-time-text">Just now</span></span>
+    </div>
+    <div class="grid">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+            <h4>Total Devices</h4>
+            <div class="stat-value">{{ devices|length }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-wifi"></i></div>
+            <h4>Online Devices</h4>
+            <div class="stat-value">{{ devices|selectattr('last_seen', 'ge', now - 300)|list|length }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-star"></i></div>
+            <h4>Important Devices</h4>
+            <div class="stat-value">{{ devices|selectattr('is_important', 'eq', 1)|list|length }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-plus-circle"></i></div>
+            <h4>New Devices (24h)</h4>
+            <div class="stat-value">{{ devices|selectattr('first_seen', 'ge', now - 86400)|list|length }}</div>
+        </div>
+        {% if config.get("monitoring", "internet_health", {}).get("enabled", False) %}
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-heartbeat"></i></div>
+            <h4>Internet Health</h4>
+            <div class="stat-value">
+                {% if speed_tests %}
+                    {% set latest_test = speed_tests|sort(attribute='timestamp')|last %}
+                    {% set ping = latest_test.ping|default(0) %}
+                    {% set download = latest_test.download_speed|default(0) %}
+                    {% set upload = latest_test.upload_speed|default(0) %}
+                    
+                    {% if ping < 50 and download > 10 and upload > 5 %}
+                        <span class="status-badge-online"><i class="fas fa-check-circle"></i> Good</span>
+                    {% elif ping < 100 and download > 5 and upload > 2 %}
+                        <span class="status-badge-unknown"><i class="fas fa-exclamation-circle"></i> Fair</span>
+                    {% else %}
+                        <span class="status-badge-offline"><i class="fas fa-times-circle"></i> Poor</span>
+                    {% endif %}
+                {% else %}
+                    <span class="status-badge-unknown"><i class="fas fa-question-circle"></i> Unknown</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('speed_tests') }}" class="stat-card-link"></a>
+        </div>
+        {% endif %}
+        {% if config.get("monitoring", "security", {}).get("enabled", False) %}
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
+            <h4>Network Security</h4>
+            <div class="stat-value">
+                {% if security_vulnerabilities|default(0) > 0 %}
+                    <span class="status-badge-offline"><i class="fas fa-exclamation-triangle"></i> At Risk</span>
+                {% else %}
+                    <span class="status-badge-online"><i class="fas fa-check-circle"></i> Secure</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('network_security') }}" class="stat-card-link"></a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-panels">
+    <div class="card">
+        <div class="card-header">
+            <h3>Important Devices</h3>
+        </div>
+        <div class="important-devices-list" id="important-devices-container">
+            <table class="important-devices-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Device</th>
+                        <th>IP Address</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in devices|selectattr('is_important', 'eq', 1)|list %}
+                    <tr>
+                        <td class="device-icon-cell">
+                            <div class="device-icon">
+                                <div class="vendor-icon">
+                                    {{ device.vendor|device_icon(device.device_name)|safe }}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="device-name-container">
+                                <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="device-link">
+                                    <strong class="device-name-truncate" title="{{ device.hostname or device.ip_address }}">{{ device.hostname or device.ip_address }}</strong>
+                                </a>
+                                <div>
+                                    {% if device.last_seen >= now - 300 %}
+                                    <span class="device-status-badge status-badge-online">
+                                        <i class="fas fa-circle pulse-dot"></i> Online
+                                    </span>
+                                    {% else %}
+                                    <span class="device-status-badge status-badge-offline">
+                                        <i class="fas fa-circle"></i> Offline
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="device-ip-cell">{{ device.ip_address }}</td>
+                        <td class="device-time-cell">{{ device.last_seen|timestamp_to_relative_time }}</td>
+                        <td>
+                            <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-info-circle"></i> Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="no-important-devices">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>No important devices configured</p>
+                            <a href="{{ url_for('devices') }}" class="btn btn-sm btn-secondary">Go to Devices</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Recent Events</h3>
+        </div>
+        <div class="events-container" id="events-container">
+            {% for event in events %}
+            <div class="event-item {% if event.severity == 'error' %}event-error{% elif event.severity == 'warning' %}event-warning{% else %}event-info{% endif %}">
+                <div class="event-meta">
+                    <span class="event-time" title="{{ event.timestamp|timestamp_to_time }}">
+                        <i class="fas fa-clock"></i> {{ event.timestamp|timestamp_to_relative_time }}
+                    </span>
+                    {% if event.severity == 'error' %}
+                    <span class="badge badge-danger">{{ event.event_type }}</span>
+                    {% elif event.severity == 'warning' %}
+                    <span class="badge badge-warning">{{ event.event_type }}</span>
+                    {% else %}
+                    <span class="badge badge-info">{{ event.event_type }}</span>
+                    {% endif %}
+                </div>
+                <div class="event-message" title="{{ event.message }}">
+                    {% if event.details %}
+                        {% set details = event.details|from_json %}
+                        {% if details.mac %}
+                            {% if 'Device went offline:' in event.message %}
+                                Device went offline: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname }}</a> ({{ details.ip }})
+                            {% elif 'Device detected:' in event.message or 'New device detected:' in event.message %}
+                                {{ event.message.split(':')[0] }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname or details.ip }}</a> ({{ details.ip }})
+                            {% elif 'Device fingerprinted:' in event.message or 'Device identified:' in event.message or 'Device identified from vendor:' in event.message %}
+                                {% set msg_type = event.message.split(':')[0] %}
+                                {% set device_name = details.hostname %}
+                                {% if details.manufacturer and details.model %}
+                                    {% set device_name = details.manufacturer + ' ' + details.model %}
+                                {% endif %}
+                                {{ msg_type }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ device_name or details.ip }}</a> ({{ details.ip }})
+                            {% else %}
+                                {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
+                            {% endif %}
+                        {% else %}
+                            {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
+                        {% endif %}
+                    {% else %}
+                        {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="no-events">
+                <i class="fas fa-bell-slash"></i>
+                <p>No events recorded yet</p>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card-footer">
+            <a href="{{ url_for('events') }}" class="btn btn-secondary">View All Events</a>
+        </div>
+    </div>
+</div>
+
+{% if config.get("monitoring", "internet_health", {}).get("enabled", False) and speed_tests %}
+<div class="card">
+    <div class="card-header">
+        <h3>Internet Speed</h3>
+    </div>
+    <div class="chart-container">
+        <canvas id="speedChart"></canvas>
+    </div>
+</div>
+{% endif %}
+
+{% if website_checks %}
+<div class="card">
+    <div class="card-header">
+        <h3>Website Status</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Response Time</th>
+                <th>Last Check</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for check in website_checks %}
+            <tr>
+                <td>{{ check.url }}</td>
+                <td>
+                    {% if check.is_up %}
+                    <span class="status status-online" title="Online"></span> Up
+                    {% else %}
+                    <span class="status status-offline" title="Offline"></span> Down
+                    {% endif %}
+                </td>
+                <td>{% if check.response_time %}{{ check.response_time|round(2) }}s{% else %}-{% endif %}</td>
+                <td>{{ check.timestamp|timestamp_to_time }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4">No website monitoring configured</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Function to toggle installation instructions visibility
+    function toggleInstructions(toolId) {
+        const instructionsEl = document.getElementById('instructions-' + toolId);
+        const buttonEl = instructionsEl.previousElementSibling;
+        
+        instructionsEl.classList.toggle('visible');
+        
+        if (instructionsEl.classList.contains('visible')) {
+            buttonEl.innerHTML = '<i class="fas fa-times"></i> Hide Installation Instructions';
+        } else {
+            buttonEl.innerHTML = '<i class="fas fa-terminal"></i> Show Installation Instructions';
+        }
+    }
+    
+    // Function to format timestamps
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    }
+    
+    // Function to format relative time for JavaScript
+    function formatRelativeTime(timestamp) {
+        const now = new Date();
+        const date = new Date(timestamp * 1000);
+        const diffInSeconds = Math.floor((now - date) / 1000);
+        
+        if (diffInSeconds < 60) {
+            return 'Just now';
+        } else if (diffInSeconds < 3600) {
+            const minutes = Math.floor(diffInSeconds / 60);
+            return `${minutes}m ago`;
+        } else if (diffInSeconds < 86400) {
+            const hours = Math.floor(diffInSeconds / 3600);
+            return `${hours}h ago`;
+        } else {
+            const days = Math.floor(diffInSeconds / 86400);
+            return `${days}d ago`;
+        }
+    }
+
+    // Update the "last updated" time
+    function updateLastUpdated() {
+        const updateTimeElement = document.getElementById('update-time-text');
+        const now = new Date();
+        const lastUpdate = window.lastUpdateTime || now;
+        window.lastUpdateTime = now;
+        
+        const diffInSeconds = Math.floor((now - lastUpdate) / 1000);
+        
+        let text = 'Just now';
+        let className = 'update-time-normal';
+        
+        if (diffInSeconds < 60) {
+            text = 'Just now';
+        } else if (diffInSeconds < 300) {
+            text = 'Less than 5 minutes ago';
+        } else {
+            text = 'Over 5 minutes ago';
+            className = 'update-time-warning';
+        }
+        
+        updateTimeElement.textContent = text;
+        updateTimeElement.className = 'update-time-text ' + className;
+    }
+    
+    // Call immediately and then every 30 seconds
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 30000);
+
+    {% if speed_tests %}
+    // Speed test chart
+    const speedCtx = document.getElementById('speedChart').getContext('2d');
+    const speedChart = new Chart(speedCtx, {
+        type: 'line',
+        data: {
+            labels: [
+                {% for test in speed_tests %}
+                '{{ test.timestamp|timestamp_to_time }}',
+                {% endfor %}
+            ],
+            datasets: [
+                {
+                    label: 'Download (Mbps)',
+                    data: [
+                        {% for test in speed_tests %}
+                        {{ test.download_speed }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(166, 227, 161)', // Catppuccin green
+                    backgroundColor: 'rgba(166, 227, 161, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Upload (Mbps)',
+                    data: [
+                        {% for test in speed_tests %}
+                        {{ test.upload_speed }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(137, 180, 250)', // Catppuccin blue
+                    backgroundColor: 'rgba(137, 180, 250, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Ping (ms)',
+                    data: [
+                        {% for test in speed_tests %}
+                        {{ test.ping }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(249, 226, 175)', // Catppuccin yellow
+                    backgroundColor: 'rgba(249, 226, 175, 0.1)',
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Speed (Mbps)'
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Ping (ms)'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+
+    // Function to refresh events data (no UI feedback needed since auto-refreshing)
+    function refreshData() {
+        
+        // Fetch recent events
+        fetch('{{ url_for("api_events") }}?limit=5')
+            .then(response => response.json())
+            .then(events => {
+                const eventsContainer = document.getElementById('events-container');
+                if (events.length > 0) {
+                    let html = '';
+                    events.forEach(event => {
+                        let badgeClass = 'badge-info';
+                        let eventClass = 'event-info';
+                        
+                        if (event.severity === 'error') {
+                            badgeClass = 'badge-danger';
+                            eventClass = 'event-error';
+                        } else if (event.severity === 'warning') {
+                            badgeClass = 'badge-warning';
+                            eventClass = 'event-warning';
+                        }
+                        
+                        html += `
+                            <div class="event-item ${eventClass}">
+                                <div class="event-meta">
+                                    <span class="event-time" title="${formatTimestamp(event.timestamp)}">
+                                        <i class="fas fa-clock"></i> ${formatRelativeTime(event.timestamp)}
+                                    </span>
+                                    <span class="badge ${badgeClass}">${event.event_type}</span>
+                                </div>
+                                <div class="event-message" title="${event.message}">
+                                    ${formatEventMessage(event)}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    eventsContainer.innerHTML = html;
+                } else {
+                    eventsContainer.innerHTML = `
+                        <div class="no-events">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>No events recorded yet</p>
+                        </div>
+                    `;
+                }
+                
+            })
+            .catch(error => {
+                console.error('Error fetching events:', error);
+            });
+    }
+    
+    // Auto-refresh important devices function (removed manual refresh button)
+    function autoRefreshImportantDevices() {
+        // Fetch updated device data
+        // Implementation would go here
+    }
+    
+    // Function to format event messages and create links to device details
+    function formatEventMessage(event) {
+        // If event has details, parse it
+        if (event.details) {
+            try {
+                const details = JSON.parse(event.details);
+                if (details.mac) {
+                    if (event.message.includes('Device went offline:')) {
+                        return `Device went offline: <a href="/devices/${details.mac}" class="device-name">${details.hostname}</a> (${details.ip})`;
+                    } else if (event.message.includes('Device detected:') || event.message.includes('New device detected:')) {
+                        const prefix = event.message.split(':')[0];
+                        return `${prefix}: <a href="/devices/${details.mac}" class="device-name">${details.hostname || details.ip}</a> (${details.ip})`;
+                    } else if (event.message.includes('Device fingerprinted:') || event.message.includes('Device identified:') || event.message.includes('Device identified from vendor:')) {
+                        const msgType = event.message.split(':')[0];
+                        let deviceName = details.hostname || '';
+                        if (details.manufacturer && details.model) {
+                            deviceName = `${details.manufacturer} ${details.model}`;
+                        }
+                        return `${msgType}: <a href="/devices/${details.mac}" class="device-name">${deviceName || details.ip}</a> (${details.ip})`;
+                    }
+                }
+            } catch(e) {
+                console.error('Error parsing event details:', e);
+            }
+        }
+        
+        // Default formatting if no special case applies
+        return event.message.replace(/Device /g, '<span class="device-name">Device ').replace(/device /g, '<span class="device-name">device ') + '</span>';
+    }
+    
+    // Call refreshData immediately to load events on page load
+    refreshData();
+    
+    // Refresh data every 30 seconds
+    setInterval(refreshData, 30000);
+</script>
+{% endblock %}

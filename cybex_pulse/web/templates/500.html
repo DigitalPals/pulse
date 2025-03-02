@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error - Cybex Pulse{% endblock %}
+
+{% block header %}Server Error{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-code">500</div>
+    <div class="error-message">Something went wrong on our end.</div>
+    <div class="error-details">
+        The server encountered an internal error and was unable to complete your request.
+        Please try again later or contact the administrator if the problem persists.
+    </div>
+    <div class="error-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .error-container {
+        text-align: center;
+        padding: 50px 20px;
+    }
+    
+    .error-code {
+        font-size: 6rem;
+        font-weight: bold;
+        color: var(--accent);
+        margin-bottom: 20px;
+    }
+    
+    .error-message {
+        font-size: 24px;
+        color: var(--text-important);
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+    
+    .error-details {
+        color: var(--text-muted);
+        margin-bottom: 30px;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 14px;
+    }
+    
+    .error-actions {
+        margin-top: 30px;
+    }
+</style>
+{% endblock %}

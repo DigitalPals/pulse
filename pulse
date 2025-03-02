@@ -1,0 +1,6 @@
+#!/bin/bash
+# Cybex Pulse launcher script
+# This script starts the Cybex Pulse application
+
+# Change to the Pulse directory, activate the virtual environment, and run the application
+cd /root/Pulse && source venv/bin/activate && python -m cybex_pulse "$@"

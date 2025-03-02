@@ -1,0 +1,755 @@
+{% extends "base.html" %}
+
+{% block title %}Setup Wizard - Cybex Pulse{% endblock %}
+
+{% block header %}Setup Wizard{% endblock %}
+
+{% block content %}
+<div class="card setup-wizard-card">
+    <div class="card-header">
+        <h3>Welcome to Cybex Pulse - Home Network Monitoring</h3>
+    </div>
+    <div class="card-body">
+        <p class="setup-intro">This wizard will guide you through the initial setup of Cybex Pulse. You can change these settings later through the Settings page.</p>
+
+        <form method="post" action="{{ url_for('setup_wizard') }}">
+            <!-- Step indicator -->
+            <div class="setup-steps">
+                <div class="step {% if step == 1 %}active{% endif %}">
+                    <div class="step-icon"><i class="fas fa-network-wired"></i></div>
+                    <div class="step-label">Network</div>
+                </div>
+                <div class="step {% if step == 2 %}active{% endif %}">
+                    <div class="step-icon"><i class="fas fa-bell"></i></div>
+                    <div class="step-label">Alerts</div>
+                </div>
+                <div class="step {% if step == 3 %}active{% endif %}">
+                    <div class="step-icon"><i class="fas fa-globe"></i></div>
+                    <div class="step-label">Web Interface</div>
+                </div>
+                <div class="step {% if step == 4 %}active{% endif %}">
+                    <div class="step-icon"><i class="fas fa-fingerprint"></i></div>
+                    <div class="step-label">Fingerprinting</div>
+                </div>
+                <div class="step {% if step == 5 %}active{% endif %}">
+                    <div class="step-icon"><i class="fas fa-cog"></i></div>
+                    <div class="step-label">Features</div>
+                </div>
+            </div>
+
+            <div class="setup-content">
+                {% if step == 1 %}
+                <!-- Step 1: Network Configuration -->
+                <div class="setup-section">
+                    <h4><i class="fas fa-network-wired"></i> Network Configuration</h4>
+                    <p class="setup-description">Configure how Cybex Pulse scans your network to discover and monitor devices.</p>
+                    
+                    <div class="form-group">
+                        <label for="subnet">Network Subnet</label>
+                        {% if detected_subnet %}
+                        <div class="detected-subnet">
+                            <p><i class="fas fa-check-circle"></i> Detected subnet: <span class="detected-value">{{ detected_subnet }}</span></p>
+                            <div class="form-check">
+                                <input type="checkbox" id="use_detected_subnet" name="use_detected_subnet" class="form-check-input" checked>
+                                <label for="use_detected_subnet">Use detected subnet</label>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <input type="text" id="subnet" name="subnet" class="form-control" value="{{ detected_subnet }}" placeholder="e.g., 192.168.1.0/24">
+                        <small class="form-text text-muted">The network range to scan for devices (e.g., 192.168.1.0/24)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="scan_interval">Network Scan Interval (seconds)</label>
+                        <input type="number" id="scan_interval" name="scan_interval" class="form-control" value="{{ config.get('general', 'scan_interval') }}" min="10">
+                        <small class="form-text text-muted">How often Cybex Pulse will scan your network for new or changed devices</small>
+                    </div>
+                </div>
+                <div class="setup-actions">
+                    <button type="submit" name="next_step" value="2" class="btn btn-primary">Next <i class="fas fa-arrow-right"></i></button>
+                </div>
+
+                {% elif step == 2 %}
+                <!-- Step 2: Telegram Alerts Configuration -->
+                <div class="setup-section">
+                    <h4><i class="fas fa-bell"></i> Alert Configuration</h4>
+                    <p class="setup-description">Configure how you want to be notified about events on your network.</p>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="enable_telegram" name="enable_telegram" class="form-check-input" {% if config.get('telegram', 'enabled') %}checked{% endif %}>
+                        <label for="enable_telegram">Enable Telegram alerts</label>
+                    </div>
+                    <div id="telegram-settings" {% if not config.get('telegram', 'enabled') %}style="display: none;"{% endif %}>
+                        <p>To use Telegram alerts, you need a Telegram Bot API token. If you don't have one, you can create a bot by talking to @BotFather on Telegram.</p>
+                        <div class="form-group">
+                            <label for="telegram_api_token">Telegram Bot API Token</label>
+                            <input type="text" id="telegram_api_token" name="telegram_api_token" class="form-control" value="{{ config.get('telegram', 'api_token') }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="telegram_chat_id">Telegram Chat ID</label>
+                            <input type="text" id="telegram_chat_id" name="telegram_chat_id" class="form-control" value="{{ config.get('telegram', 'chat_id') }}">
+                        </div>
+                    </div>
+                    
+                    <div class="alert-options">
+                        <h5>Notification Types</h5>
+                        <div class="form-check">
+                            <input type="checkbox" id="new_device_alert" name="new_device_alert" class="form-check-input" checked>
+                            <label for="new_device_alert">New device discovered</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" id="device_offline_alert" name="device_offline_alert" class="form-check-input" checked>
+                            <label for="device_offline_alert">Device goes offline</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" id="important_device_alert" name="important_device_alert" class="form-check-input" checked>
+                            <label for="important_device_alert">Important device status changes</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-actions">
+                    <button type="submit" name="prev_step" value="1" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
+                    <button type="submit" name="next_step" value="3" class="btn btn-primary">Next <i class="fas fa-arrow-right"></i></button>
+                </div>
+
+                {% elif step == 3 %}
+                <!-- Step 3: Web Interface Configuration -->
+                <div class="setup-section">
+                    <h4><i class="fas fa-globe"></i> Web Interface Configuration</h4>
+                    <p class="setup-description">Configure how to access the Cybex Pulse web interface.</p>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="enable_web" name="enable_web" class="form-check-input" checked disabled>
+                        <label for="enable_web">Enable web interface</label>
+                        <small class="form-text text-muted">The web interface is required and cannot be disabled.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="web_host">Web Interface Host</label>
+                        <input type="text" id="web_host" name="web_host" class="form-control" value="{{ config.get('web_interface', 'host') }}">
+                        <small class="form-text text-muted">Use 0.0.0.0 to listen on all interfaces or a specific IP address</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="web_port">Web Interface Port</label>
+                        <input type="number" id="web_port" name="web_port" class="form-control" value="{{ config.get('web_interface', 'port') }}" min="1024" max="65535">
+                        <small class="form-text text-muted">Choose a port between 1024 and 65535 (default: 8080)</small>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="setup_auth" name="setup_auth" class="form-check-input">
+                        <label for="setup_auth">Set up authentication for the web interface (recommended)</label>
+                    </div>
+                    <div id="auth-settings" style="display: none;">
+                        <div class="form-group">
+                            <label for="web_username">Username</label>
+                            <input type="text" id="web_username" name="web_username" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="web_password">Password</label>
+                            <input type="password" id="web_password" name="web_password" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-actions">
+                    <button type="submit" name="prev_step" value="2" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
+                    <button type="submit" name="next_step" value="4" class="btn btn-primary">Next <i class="fas fa-arrow-right"></i></button>
+                </div>
+
+                {% elif step == 4 %}
+                <!-- Step 4: Fingerprinting Configuration -->
+                <div class="setup-section">
+                    <h4><i class="fas fa-fingerprint"></i> Device Fingerprinting</h4>
+                    <p class="setup-description">Configure device fingerprinting to automatically identify device types, manufacturers, and models on your network.</p>
+                    
+                    <div class="fingerprinting-overview">
+                        <div class="icon-container">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div class="fingerprinting-text">
+                            <h5>What is Device Fingerprinting?</h5>
+                            <p>Device fingerprinting allows Cybex Pulse to identify devices on your network by analyzing their network signatures, open ports, and service responses. This helps identify device types, manufacturers, and models without manual configuration.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" id="enable_fingerprinting" name="enable_fingerprinting" class="form-check-input" {% if config.get('fingerprinting', 'enabled') %}checked{% endif %}>
+                        <label for="enable_fingerprinting">Enable device fingerprinting</label>
+                        <small class="form-text text-muted">Automatically identify device types, manufacturers, and models on your network</small>
+                    </div>
+                    
+                    <div id="fingerprinting-settings" {% if not config.get('fingerprinting', 'enabled') %}style="display: none;"{% endif %}>
+                        <div class="form-group">
+                            <label for="fingerprinting_confidence">Minimum Confidence Threshold</label>
+                            <input type="range" id="fingerprinting_confidence" name="fingerprinting_confidence" class="form-control" min="0.1" max="1" step="0.05" value="{{ config.get('fingerprinting', 'confidence_threshold', default=0.5) }}">
+                            <div class="range-labels">
+                                <span>Low (More Matches)</span>
+                                <span id="confidence-value">{{ (config.get('fingerprinting', 'confidence_threshold', default=0.5) * 100)|int }}%</span>
+                                <span>High (Fewer Matches)</span>
+                            </div>
+                            <small class="form-text text-muted">Only apply identifications that meet this confidence level</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="fingerprinting_max_threads">Maximum Concurrent Threads</label>
+                            <input type="number" id="fingerprinting_max_threads" name="fingerprinting_max_threads" class="form-control" min="1" max="20" value="{{ config.get('fingerprinting', 'max_threads', default=10) }}">
+                            <small class="form-text text-muted">Maximum number of devices to fingerprint simultaneously</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="fingerprinting_timeout">Fingerprinting Timeout (seconds)</label>
+                            <input type="number" id="fingerprinting_timeout" name="fingerprinting_timeout" class="form-control" min="1" max="10" value="{{ config.get('fingerprinting', 'timeout', default=2) }}">
+                            <small class="form-text text-muted">Maximum time to spend fingerprinting each device</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-actions">
+                    <button type="submit" name="prev_step" value="3" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
+                    <button type="submit" name="next_step" value="5" class="btn btn-primary">Next <i class="fas fa-arrow-right"></i></button>
+                </div>
+
+                {% elif step == 5 %}
+                <!-- Step 5: Additional Features Configuration -->
+                <div class="setup-section">
+                    <h4><i class="fas fa-cog"></i> Additional Features Configuration</h4>
+                    <p class="setup-description">Configure additional monitoring features to enhance your network visibility.</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">
+                                <i class="fas fa-heartbeat"></i>
+                            </div>
+                            <div class="feature-content">
+                                <h5>Internet Health Checks</h5>
+                                <p>Regularly test your internet connection speed and latency.</p>
+                                <div class="form-check">
+                                    <input type="checkbox" id="enable_health" name="enable_health" class="form-check-input" {% if config.get('monitoring', 'internet_health', {}).get('enabled') %}checked{% endif %}>
+                                    <label for="enable_health">Enable internet health checks</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-card">
+                            <div class="feature-icon">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <div class="feature-content">
+                                <h5>Website Monitoring</h5>
+                                <p>Monitor availability and response time of important websites.</p>
+                                <div class="form-check">
+                                    <input type="checkbox" id="enable_websites" name="enable_websites" class="form-check-input" {% if config.get('monitoring', 'websites', {}).get('enabled') %}checked{% endif %}>
+                                    <label for="enable_websites">Enable website monitoring</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-card">
+                            <div class="feature-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="feature-content">
+                                <h5>Security Scanning</h5>
+                                <p>Scan your network for potential security vulnerabilities.</p>
+                                <div class="form-check">
+                                    <input type="checkbox" id="enable_security" name="enable_security" class="form-check-input" {% if config.get('monitoring', 'security', {}).get('enabled') %}checked{% endif %}>
+                                    <label for="enable_security">Enable security scanning</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="website-settings" {% if not config.get('monitoring', 'websites', {}).get('enabled') %}style="display: none;"{% endif %}>
+                        <h5>Websites to Monitor</h5>
+                        <p>You can add up to 5 websites to monitor.</p>
+                        <div class="website-list">
+                            {% for i in range(5) %}
+                            <div class="form-group">
+                                <label for="website_url_{{ i }}">Website URL #{{ i+1 }}</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-globe"></i></span>
+                                    </div>
+                                    <input type="text" id="website_url_{{ i }}" name="website_url_{{ i }}" class="form-control" 
+                                           value="{{ config.get('monitoring', 'websites', {}).get('urls', [])[i] if i < config.get('monitoring', 'websites', {}).get('urls', [])|length else '' }}"
+                                           placeholder="https://example.com">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div id="security-note" {% if not config.get('monitoring', 'security', {}).get('enabled') %}style="display: none;"{% endif %}>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>Security Scanning Note:</strong>
+                                <p>Security scanning requires elevated permissions and additional tools. Make sure you have nmap installed and proper permissions to use it.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-actions">
+                    <button type="submit" name="prev_step" value="4" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Previous</button>
+                    <button type="submit" name="complete_setup" value="true" class="btn btn-primary"><i class="fas fa-check"></i> Complete Setup</button>
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .setup-wizard-card {
+        max-width: 900px;
+        margin: 0 auto;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-color);
+    }
+    
+    .setup-intro {
+        font-size: 14px;
+        margin-bottom: 24px;
+        color: var(--text);
+        line-height: 1.6;
+    }
+    
+    .setup-description {
+        color: var(--text-muted);
+        margin-bottom: 24px;
+        font-size: 14px;
+    }
+    
+    .setup-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        position: relative;
+        padding: 0 10px;
+    }
+    
+    .setup-steps::before {
+        content: '';
+        position: absolute;
+        top: 25px;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background-color: var(--border-color);
+        z-index: 1;
+    }
+    
+    .step {
+        position: relative;
+        text-align: center;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 60px;
+    }
+    
+    .step-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: var(--lighter-bg);
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 8px;
+        font-size: 18px;
+        transition: all 0.3s ease;
+        border: 3px solid var(--border-color);
+    }
+    
+    .step-label {
+        color: var(--text-muted);
+        font-size: 14px;
+        font-weight: 500;
+        transition: color 0.3s ease;
+    }
+    
+    .step.active .step-icon {
+        background-color: var(--accent);
+        color: var(--text-important);
+        transform: scale(1.1);
+        border-color: var(--accent);
+        box-shadow: 0 0 15px rgba(217, 58, 58, 0.3);
+    }
+    
+    .step.active .step-label {
+        color: var(--accent);
+        font-weight: 600;
+    }
+    
+    .setup-content {
+        padding: 20px 0;
+    }
+    
+    .setup-section {
+        margin-bottom: 24px;
+    }
+    
+    .setup-section h4 {
+        color: var(--text-important);
+        margin-bottom: 15px;
+        font-size: 18px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 10px;
+        display: flex;
+        align-items: center;
+        font-weight: 600;
+        position: relative;
+        padding-left: 12px;
+    }
+    
+    .setup-section h4::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 4px;
+        background-color: var(--accent);
+        border-radius: 2px;
+    }
+    
+    .setup-section h4 i {
+        margin-right: 10px;
+    }
+    
+    .setup-actions {
+        display: flex;
+        justify-content: space-between;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .detected-subnet {
+        background-color: var(--lighter-bg);
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        border-left: 4px solid var(--accent);
+    }
+    
+    .detected-subnet p {
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+    }
+    
+    .detected-subnet i {
+        color: var(--green);
+        margin-right: 8px;
+    }
+    
+    .detected-value {
+        font-family: monospace;
+        font-weight: 600;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.15);
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-left: 5px;
+    }
+    
+    .alert-options {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 6px;
+        background-color: var(--lighter-bg);
+    }
+    
+    .alert-options h5 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: var(--text-important);
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
+    /* Fingerprinting section styles */
+    .fingerprinting-overview {
+        display: flex;
+        background-color: var(--lighter-bg);
+        padding: 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+    
+    .icon-container {
+        flex-shrink: 0;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: var(--accent);
+        color: var(--text-important);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+    }
+    
+    .icon-container i {
+        font-size: 24px;
+    }
+    
+    .fingerprinting-text h5 {
+        color: var(--text-important);
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
+    .fingerprinting-text p {
+        color: var(--text);
+        margin: 0;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+    
+    #fingerprinting-settings {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 6px;
+        background-color: var(--lighter-bg);
+        border: 1px solid var(--border-color);
+    }
+    
+    .range-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+    
+    #confidence-value {
+        font-weight: 500;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.15);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    
+    /* Feature grid styles */
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 24px;
+    }
+    
+    .feature-card {
+        background-color: var(--lighter-bg);
+        border-radius: 6px;
+        overflow: hidden;
+        display: flex;
+        padding: 16px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid var(--border-color);
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--accent);
+        color: var(--text-important);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    
+    .feature-content {
+        flex-grow: 1;
+    }
+    
+    .feature-content h5 {
+        margin-top: 0;
+        margin-bottom: 8px;
+        color: var(--text-important);
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
+    .feature-content p {
+        color: var(--text-muted);
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
+    
+    /* Website list styles */
+    .website-list {
+        margin-top: 16px;
+    }
+    
+    .input-group {
+        display: flex;
+        position: relative;
+    }
+    
+    .input-group-prepend {
+        display: flex;
+        align-items: center;
+    }
+    
+    .input-group-text {
+        background-color: var(--lighter-bg);
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 4px 0 0 4px;
+        border: 1px solid var(--border-color);
+        border-right: none;
+    }
+    
+    .input-group input {
+        flex-grow: 1;
+        border-radius: 0 4px 4px 0;
+    }
+    
+    /* Security note styling */
+    #security-note {
+        margin-top: 20px;
+    }
+    
+    .alert-info {
+        display: flex;
+        align-items: flex-start;
+        background-color: var(--lighter-bg);
+        border-left: 4px solid var(--highlight-blue);
+        color: var(--text);
+        padding: 12px;
+        border-radius: 6px;
+    }
+    
+    .alert-info i {
+        font-size: 20px;
+        color: var(--highlight-blue);
+        margin-right: 12px;
+        margin-top: 2px;
+    }
+    
+    .alert-info strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--text-important);
+        font-weight: 600;
+    }
+    
+    .alert-info p {
+        margin: 0;
+        font-size: 14px;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .feature-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .setup-steps {
+            overflow-x: auto;
+            justify-content: flex-start;
+            padding-bottom: 10px;
+        }
+        
+        .step {
+            margin-right: 40px;
+            min-width: 60px;
+        }
+        
+        .setup-steps::before {
+            left: 25px;
+            right: 25px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle Telegram settings visibility
+        const enableTelegram = document.getElementById('enable_telegram');
+        const telegramSettings = document.getElementById('telegram-settings');
+        
+        if (enableTelegram && telegramSettings) {
+            enableTelegram.addEventListener('change', function() {
+                telegramSettings.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Toggle authentication settings visibility
+        const setupAuth = document.getElementById('setup_auth');
+        const authSettings = document.getElementById('auth-settings');
+        
+        if (setupAuth && authSettings) {
+            setupAuth.addEventListener('change', function() {
+                authSettings.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Toggle website settings visibility
+        const enableWebsites = document.getElementById('enable_websites');
+        const websiteSettings = document.getElementById('website-settings');
+        
+        if (enableWebsites && websiteSettings) {
+            enableWebsites.addEventListener('change', function() {
+                websiteSettings.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Toggle security note visibility
+        const enableSecurity = document.getElementById('enable_security');
+        const securityNote = document.getElementById('security-note');
+        
+        if (enableSecurity && securityNote) {
+            enableSecurity.addEventListener('change', function() {
+                securityNote.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Toggle fingerprinting settings visibility
+        const enableFingerprinting = document.getElementById('enable_fingerprinting');
+        const fingerprintingSettings = document.getElementById('fingerprinting-settings');
+        
+        if (enableFingerprinting && fingerprintingSettings) {
+            enableFingerprinting.addEventListener('change', function() {
+                fingerprintingSettings.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Update confidence value display
+        const confidenceSlider = document.getElementById('fingerprinting_confidence');
+        const confidenceValue = document.getElementById('confidence-value');
+        
+        if (confidenceSlider && confidenceValue) {
+            confidenceSlider.addEventListener('input', function() {
+                confidenceValue.textContent = Math.round(this.value * 100) + '%';
+            });
+        }
+        
+        // Toggle subnet input based on checkbox
+        const useDetectedSubnet = document.getElementById('use_detected_subnet');
+        const subnetInput = document.getElementById('subnet');
+        
+        if (useDetectedSubnet && subnetInput) {
+            useDetectedSubnet.addEventListener('change', function() {
+                subnetInput.disabled = this.checked;
+            });
+            
+            // Initial state
+            subnetInput.disabled = useDetectedSubnet.checked;
+        }
+    });
+</script>
+{% endblock %}

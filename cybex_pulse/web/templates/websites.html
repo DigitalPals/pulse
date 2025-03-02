@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Website Monitoring - Cybex Pulse{% endblock %}
+
+{% block header %}
+{% if website_url %}
+Website History: {{ website_url }}
+{% else %}
+Website Monitoring
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if website_url %}
+<div class="card">
+    <div class="card-header">
+        <h3>Website History: {{ website_url }}</h3>
+        <a href="{{ url_for('websites') }}" class="btn btn-secondary btn-sm">Back to All Websites</a>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header">
+        <h3>Website Status</h3>
+        <span id="last-updated">Last updated: <span id="update-time">{{ now }}</span></span>
+    </div>
+    <div class="website-grid">
+        {% for website in websites %}
+        <div class="website-card {% if website.is_up %}website-up{% else %}website-down{% endif %}">
+            <div class="website-header">
+                <h4>{{ website.url }}</h4>
+                <div class="website-status">
+                    {% if website.is_up %}
+                    <span class="status status-online"></span> Up
+                    {% else %}
+                    <span class="status status-offline"></span> Down
+                    {% endif %}
+                </div>
+            </div>
+            <div class="website-details">
+                <div class="detail-row">
+                    <div class="detail-label">Status Code:</div>
+                    <div class="detail-value">{{ website.status_code or 'N/A' }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Response Time:</div>
+                    <div class="detail-value">{% if website.response_time %}{{ website.response_time|round(2) }}s{% else %}N/A{% endif %}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Last Check:</div>
+                    <div class="detail-value">{{ website.timestamp|timestamp_to_time }}</div>
+                </div>
+                {% if not website.is_up and website.error_message %}
+                <div class="detail-row">
+                    <div class="detail-label">Error:</div>
+                    <div class="detail-value error-message">{{ website.error_message }}</div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="website-actions">
+                <a href="{{ website.url }}" target="_blank" class="btn btn-secondary btn-sm">Visit Website</a>
+                <a href="{{ url_for('website_history', url=website.url) }}" class="btn btn-primary btn-sm">View History</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="no-websites">
+            <p>No websites configured for monitoring.</p>
+            <p>You can add websites to monitor in the <a href="{{ url_for('settings') }}">Settings</a> page.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h3>
+            {% if website_url %}
+            Check History for {{ website_url }}
+            {% else %}
+            Recent Checks
+            {% endif %}
+        </h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                {% if not website_url %}<th>URL</th>{% endif %}
+                <th>Time</th>
+                <th>Status</th>
+                <th>Status Code</th>
+                <th>Response Time</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+        <tbody id="checks-table">
+            {% for check in checks %}
+            <tr>
+                {% if not website_url %}<td>{{ check.url }}</td>{% endif %}
+                <td>{{ check.timestamp|timestamp_to_time }}</td>
+                <td>
+                    {% if check.is_up %}
+                    <span class="status status-online"></span> Up
+                    {% else %}
+                    <span class="status status-offline"></span> Down
+                    {% endif %}
+                </td>
+                <td>{{ check.status_code or 'N/A' }}</td>
+                <td>{% if check.response_time %}{{ check.response_time|round(2) }}s{% else %}N/A{% endif %}</td>
+                <td>{{ check.error_message or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="{% if website_url %}5{% else %}6{% endif %}">No website checks recorded yet</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if response_times %}
+<div class="card">
+    <div class="card-header">
+        <h3>Response Time History</h3>
+    </div>
+    <div class="chart-container">
+        <canvas id="responseTimeChart"></canvas>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .website-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 20px;
+    }
+    
+    .website-card {
+        background-color: var(--surface0);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+    
+    .website-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .website-up {
+        border-top: 3px solid var(--green);
+    }
+    
+    .website-down {
+        border-top: 3px solid var(--red);
+    }
+    
+    .website-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background-color: var(--surface1);
+    }
+    
+    .website-header h4 {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--text);
+        word-break: break-all;
+    }
+    
+    .website-status {
+        display: flex;
+        align-items: center;
+        font-weight: bold;
+    }
+    
+    .website-details {
+        padding: 15px;
+    }
+    
+    .detail-row {
+        display: flex;
+        margin-bottom: 8px;
+    }
+    
+    .detail-label {
+        width: 120px;
+        font-weight: bold;
+        color: var(--subtext1);
+    }
+    
+    .detail-value {
+        flex: 1;
+    }
+    
+    .error-message {
+        color: var(--red);
+    }
+    
+    .website-actions {
+        display: flex;
+        justify-content: space-between;
+        padding: 15px;
+        background-color: var(--surface1);
+    }
+    
+    .no-websites {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px;
+        background-color: var(--surface0);
+        border-radius: 8px;
+    }
+    
+    .chart-container {
+        height: 400px;
+        padding: 20px;
+    }
+</style>
+
+{% if response_times %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Response time chart
+    const responseTimeCtx = document.getElementById('responseTimeChart').getContext('2d');
+    const responseTimeChart = new Chart(responseTimeCtx, {
+        type: 'line',
+        data: {
+            labels: {{ response_times.labels|tojson }},
+            datasets: [
+                {% for url, data in response_times.datasets.items() %}
+                {
+                    label: '{{ url }}',
+                    data: {{ data|tojson }},
+                    borderColor: getRandomColor(),
+                    backgroundColor: 'transparent',
+                    tension: 0.1
+                },
+                {% endfor %}
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Response Time (seconds)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+    
+    // Generate random color for chart lines
+    function getRandomColor() {
+        const colors = [
+            'rgb(166, 227, 161)', // green
+            'rgb(137, 180, 250)', // blue
+            'rgb(249, 226, 175)', // yellow
+            'rgb(203, 166, 247)', // mauve
+            'rgb(243, 139, 168)', // red
+            'rgb(148, 226, 213)', // teal
+            'rgb(250, 179, 135)', // peach
+            'rgb(180, 190, 254)'  // lavender
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
+</script>
+{% endif %}
+
+<script>
+    // Function to format timestamps
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    }
+
+    // Update the "last updated" time
+    function updateLastUpdated() {
+        document.getElementById('update-time').textContent = new Date().toLocaleString();
+    }
+    
+    // Call immediately and then every minute
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 60000);
+</script>
+{% endblock %}

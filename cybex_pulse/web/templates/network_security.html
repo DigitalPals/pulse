@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Network Security - Cybex Pulse{% endblock %}
+
+{% block header %}Network Security{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Security Overview</h3>
+    </div>
+    <div class="card-content">
+        <p class="card-intro">The Network Security scanner monitors your network for potential security vulnerabilities, open ports, and suspicious devices.</p>
+        
+        <div class="security-overview">
+            <div class="security-status">
+                <h4>Security Status</h4>
+                {% if security_vulnerabilities|default(0) > 0 %}
+                    <div class="security-status-badge status-badge-offline">
+                        <i class="fas fa-exclamation-triangle"></i> At Risk
+                    </div>
+                    <p class="security-message">
+                        There are {{ security_vulnerabilities }} potential security vulnerabilities detected on your network.
+                    </p>
+                {% else %}
+                    <div class="security-status-badge status-badge-online">
+                        <i class="fas fa-check-circle"></i> Secure
+                    </div>
+                    <p class="security-message">
+                        No security vulnerabilities detected on your network.
+                    </p>
+                {% endif %}
+            </div>
+            
+            <div class="last-scan-info">
+                <h4>Last Scan</h4>
+                {% if last_scan %}
+                    <p>{{ last_scan.timestamp|timestamp_to_time }}</p>
+                    <a href="#" class="btn btn-sm btn-secondary" id="run-scan-btn">
+                        <i class="fas fa-sync-alt"></i> Run New Scan
+                    </a>
+                {% else %}
+                    <p>No security scans have been performed yet.</p>
+                    <a href="#" class="btn btn-sm btn-primary" id="run-scan-btn">
+                        <i class="fas fa-shield-alt"></i> Run First Scan
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if vulnerable_devices %}
+<div class="card">
+    <div class="card-header">
+        <h3>Vulnerable Devices</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Device</th>
+                <th>IP Address</th>
+                <th>Vulnerabilities</th>
+                <th>Last Checked</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in vulnerable_devices %}
+            <tr>
+                <td>
+                    <div class="device-info-cell">
+                        <div class="vendor-icon small">
+                            {{ device.vendor|device_icon(device.device_name)|safe }}
+                        </div>
+                        <div class="device-name-container">
+                            <span class="device-name">{{ device.hostname or device.ip_address }}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="device-ip-cell">{{ device.ip_address }}</td>
+                <td>
+                    {% set vulnerabilities = device.vulnerabilities|from_json %}
+                    <div class="vulnerability-tags">
+                        {% for vuln in vulnerabilities %}
+                            <span class="vulnerability-tag" title="{{ vuln.description }}">{{ vuln.name }}</span>
+                        {% endfor %}
+                    </div>
+                </td>
+                <td>{{ device.last_scan|timestamp_to_time }}</td>
+                <td>
+                    <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-info-circle"></i> Details
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h3>Network Scan Features</h3>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+            <h4>Open Port Detection</h4>
+            <p>Scans devices on your network for open ports that could represent security risks if not properly secured.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-user-secret"></i>
+            </div>
+            <h4>Vulnerability Detection</h4>
+            <p>Identifies potential security vulnerabilities on devices including weak passwords, outdated firmware, and known exploits.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <h4>Security Alerts</h4>
+            <p>Receive notifications when new security threats are detected on your network or when device status changes.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .card-intro {
+        font-size: 15px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+        border-left: 3px solid var(--accent);
+        padding-left: 16px;
+        color: var(--text);
+    }
+    
+    .security-overview {
+        display: flex;
+        gap: 40px;
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: var(--lighter-bg);
+        border-radius: 8px;
+    }
+    
+    .security-status h4,
+    .last-scan-info h4 {
+        margin-top: 0;
+        color: var(--text-important);
+        font-size: 1.1rem;
+        margin-bottom: 15px;
+    }
+    
+    .security-status {
+        flex: 1;
+    }
+    
+    .last-scan-info {
+        min-width: 200px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-left: 1px solid var(--border-color);
+        padding-left: 40px;
+    }
+    
+    .security-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+    
+    .security-status-badge i {
+        margin-right: 8px;
+        font-size: 18px;
+    }
+    
+    .security-message {
+        font-size: 15px;
+        line-height: 1.5;
+    }
+    
+    .vulnerability-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    
+    .vulnerability-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 8px;
+        border-radius: 12px;
+        background-color: rgba(217, 58, 58, 0.15);
+        color: var(--red);
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: help;
+        border: 1px solid rgba(217, 58, 58, 0.3);
+    }
+    
+    .device-info-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .vendor-icon.small {
+        width: 30px;
+        height: 30px;
+        font-size: 15px;
+        line-height: 30px;
+    }
+    
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 20px;
+    }
+    
+    .feature-card {
+        background-color: var(--lighter-bg);
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        transition: transform 0.2s ease;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-3px);
+    }
+    
+    .feature-icon {
+        margin-bottom: 15px;
+    }
+    
+    .feature-icon i {
+        font-size: 2.5rem;
+        color: var(--accent);
+    }
+    
+    .feature-card h4 {
+        margin-top: 0;
+        color: var(--text-important);
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+    }
+    
+    .feature-card p {
+        color: var(--text);
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+    
+    @media (max-width: 768px) {
+        .security-overview {
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .last-scan-info {
+            border-left: none;
+            border-top: 1px solid var(--border-color);
+            padding-left: 0;
+            padding-top: 20px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const runScanBtn = document.getElementById('run-scan-btn');
+        
+        if (runScanBtn) {
+            runScanBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Change button state to indicate scanning
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Scanning...';
+                
+                // In a real implementation, this would make an AJAX call to start the scan
+                // For now, just simulate a scan with a timeout
+                setTimeout(function() {
+                    window.location.reload();
+                }, 3000);
+            });
+        }
+    });
+</script>
+{% endblock %}

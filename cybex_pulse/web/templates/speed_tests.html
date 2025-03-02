@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Internet Health - Cybex Pulse{% endblock %}
+
+{% block header %}Internet Health{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Speed Test History</h3>
+    </div>
+    <div class="chart-container">
+        <canvas id="speedChart"></canvas>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Recent Speed Tests</h3>
+        <span id="last-updated">Last updated: <span id="update-time">{{ now }}</span></span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Download (Mbps)</th>
+                <th>Upload (Mbps)</th>
+                <th>Ping (ms)</th>
+                <th>ISP</th>
+                <th>Server</th>
+            </tr>
+        </thead>
+        <tbody id="speed-tests-table">
+            {% for test in tests %}
+            <tr>
+                <td>{{ test.timestamp|timestamp_to_time }}</td>
+                <td>{{ test.download_speed|round(2) }}</td>
+                <td>{{ test.upload_speed|round(2) }}</td>
+                <td>{{ test.ping|round(2) }}</td>
+                <td>{{ test.isp }}</td>
+                <td>{{ test.server_name }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">No speed tests recorded yet</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Speed Test Statistics</h3>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h4>Average Download</h4>
+            <div class="stat-value">{{ avg_download|round(2) }} Mbps</div>
+        </div>
+        <div class="stat-card">
+            <h4>Average Upload</h4>
+            <div class="stat-value">{{ avg_upload|round(2) }} Mbps</div>
+        </div>
+        <div class="stat-card">
+            <h4>Average Ping</h4>
+            <div class="stat-value">{{ avg_ping|round(2) }} ms</div>
+        </div>
+        <div class="stat-card">
+            <h4>Max Download</h4>
+            <div class="stat-value">{{ max_download|round(2) }} Mbps</div>
+        </div>
+        <div class="stat-card">
+            <h4>Max Upload</h4>
+            <div class="stat-value">{{ max_upload|round(2) }} Mbps</div>
+        </div>
+        <div class="stat-card">
+            <h4>Min Ping</h4>
+            <div class="stat-value">{{ min_ping|round(2) }} ms</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .chart-container {
+        height: 400px;
+        padding: 20px;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+        padding: 20px;
+    }
+    
+    .stat-card {
+        background-color: var(--surface0);
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+    
+    .stat-card h4 {
+        color: var(--subtext1);
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 1rem;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--text);
+    }
+</style>
+
+<script>
+    // Function to format timestamps
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    }
+
+    // Update the "last updated" time
+    function updateLastUpdated() {
+        document.getElementById('update-time').textContent = new Date().toLocaleString();
+    }
+    
+    // Call immediately and then every minute
+    updateLastUpdated();
+    setInterval(updateLastUpdated, 60000);
+
+    // Speed test chart
+    const speedCtx = document.getElementById('speedChart').getContext('2d');
+    const speedChart = new Chart(speedCtx, {
+        type: 'line',
+        data: {
+            labels: [
+                {% for test in tests %}
+                '{{ test.timestamp|timestamp_to_time }}',
+                {% endfor %}
+            ],
+            datasets: [
+                {
+                    label: 'Download (Mbps)',
+                    data: [
+                        {% for test in tests %}
+                        {{ test.download_speed }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(166, 227, 161)', // Catppuccin green
+                    backgroundColor: 'rgba(166, 227, 161, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Upload (Mbps)',
+                    data: [
+                        {% for test in tests %}
+                        {{ test.upload_speed }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(137, 180, 250)', // Catppuccin blue
+                    backgroundColor: 'rgba(137, 180, 250, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Ping (ms)',
+                    data: [
+                        {% for test in tests %}
+                        {{ test.ping }},
+                        {% endfor %}
+                    ],
+                    borderColor: 'rgb(249, 226, 175)', // Catppuccin yellow
+                    backgroundColor: 'rgba(249, 226, 175, 0.1)',
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Speed (Mbps)'
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Ping (ms)'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+
+    // Function to refresh speed test data
+    function refreshSpeedTests() {
+        fetch('{{ url_for("api_speed_tests") }}?limit=100')
+            .then(response => response.json())
+            .then(tests => {
+                if (tests.length > 0) {
+                    // Update table
+                    const testsTable = document.getElementById('speed-tests-table');
+                    let html = '';
+                    tests.forEach(test => {
+                        html += `
+                            <tr>
+                                <td>${formatTimestamp(test.timestamp)}</td>
+                                <td>${test.download_speed.toFixed(2)}</td>
+                                <td>${test.upload_speed.toFixed(2)}</td>
+                                <td>${test.ping.toFixed(2)}</td>
+                                <td>${test.isp || ''}</td>
+                                <td>${test.server_name || ''}</td>
+                            </tr>
+                        `;
+                    });
+                    testsTable.innerHTML = html;
+                    
+                    // Update chart
+                    speedChart.data.labels = tests.map(test => formatTimestamp(test.timestamp));
+                    speedChart.data.datasets[0].data = tests.map(test => test.download_speed);
+                    speedChart.data.datasets[1].data = tests.map(test => test.upload_speed);
+                    speedChart.data.datasets[2].data = tests.map(test => test.ping);
+                    speedChart.update();
+                    
+                    // Update last updated time
+                    updateLastUpdated();
+                }
+            })
+            .catch(error => console.error('Error fetching speed tests:', error));
+    }
+    
+    // Refresh speed tests every 60 seconds
+    setInterval(refreshSpeedTests, 60000);
+</script>
+{% endblock %}

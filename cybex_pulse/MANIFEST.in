@@ -1,0 +1,6 @@
+include README.md
+include requirements.txt
+include LICENSE
+recursive-include cybex_pulse/web/static *
+recursive-include cybex_pulse/web/templates *
+recursive-include cybex_pulse/docs *
