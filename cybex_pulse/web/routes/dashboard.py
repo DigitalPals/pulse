@@ -13,12 +13,27 @@ def register_dashboard_routes(app, server):
         app: Flask application instance
         server: WebServer instance
     """
-    # Make config and version available to all templates
+    # Make config, version, and update status available to all templates
     @app.context_processor
     def inject_config():
+        # Get update status if available
+        update_available = False
+        update_disabled = False
+        update_checker = server.main_app.update_checker if server.main_app else None
+        
+        if update_checker:
+            update_available = update_checker.update_available
+            
+            # Check if update should be disabled based on commit hash
+            if hasattr(update_checker, 'current_commit_hash') and update_checker.current_commit_hash:
+                if update_checker.current_commit_hash.startswith("install-") or update_checker.current_commit_hash == "unknown":
+                    update_disabled = True
+            
         return {
             'config_obj': server.config,
-            'version': server.version
+            'version': server.version,
+            'update_available': update_available,
+            'update_disabled': update_disabled
         }
 
     # Dashboard route

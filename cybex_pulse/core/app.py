@@ -6,6 +6,7 @@ This module contains the main application class for Cybex Pulse, responsible for
 - Managing scanning and monitoring threads
 - Handling configuration updates
 - Providing application lifecycle management
+- Checking for application updates
 """
 import json
 import logging
@@ -20,6 +21,7 @@ from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
 from cybex_pulse.core.network_scanner import NetworkScanner
 from cybex_pulse.core.alerting import AlertManager
+from cybex_pulse.utils.version_check import UpdateChecker
 from cybex_pulse.web.server import WebServer
 
 class CybexPulseApp:
@@ -40,6 +42,12 @@ class CybexPulseApp:
         # Initialize components
         self.network_scanner = NetworkScanner(config, db_manager, logger)
         self.alert_manager = AlertManager(config, db_manager, logger)
+        
+        # Initialize update checker
+        self.update_checker = UpdateChecker(
+            check_interval=3600,  # Check for updates every hour
+            logger=logger
+        )
         
         # Initialize web server if enabled
         self.web_server = None
@@ -78,6 +86,9 @@ class CybexPulseApp:
             web_thread.daemon = True
             web_thread.start()
             self.threads.append(web_thread)
+        
+        # Start update checker
+        self.update_checker.start_checker_thread()
         
         # Start optional monitoring features based on configuration
         self.start_monitoring_threads()
@@ -303,6 +314,9 @@ class CybexPulseApp:
         self.stop_event.set()
         for event in self.thread_stop_events.values():
             event.set()
+        
+        # Stop update checker
+        self.update_checker.stop_checker_thread()
         
         # Shutdown web server if it exists
         if self.web_server:
@@ -693,3 +707,51 @@ class CybexPulseApp:
         
         # TODO: Add logic to detect suspicious ports and send alerts
         # This could be implemented in a future version
+        
+    def update_application(self) -> Tuple[bool, Optional[str]]:
+        """Handle the application update process.
+        
+        Returns:
+            tuple: (success, error_message)
+        """
+        self.logger.info("Starting application update process")
+        
+        # Check for updates first
+        update_available, error = self.update_checker.check_for_updates()
+        if error:
+            return False, f"Failed to check for updates: {error}"
+            
+        if not update_available:
+            return False, "No updates available"
+            
+        # Perform update
+        success, error = self.update_checker.update_application()
+        if not success:
+            return False, f"Update failed: {error}"
+            
+        self.logger.info("Application updated successfully, preparing to restart")
+        
+        # Schedule restart
+        restart_thread = threading.Thread(
+            target=self._delayed_restart,
+            name="RestartThread",
+            daemon=True
+        )
+        restart_thread.start()
+        
+        return True, "Update successful. Application will restart shortly."
+        
+    def _delayed_restart(self, delay: int = 3) -> None:
+        """Restart the application after a short delay.
+        
+        Args:
+            delay: Delay in seconds before restarting
+        """
+        self.logger.info(f"Application will restart in {delay} seconds")
+        time.sleep(delay)
+        
+        # Clean up resources
+        self.cleanup()
+        
+        # Restart the application
+        self.update_checker.restart_application()

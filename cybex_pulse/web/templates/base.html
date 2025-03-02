@@ -91,6 +91,17 @@
                 </ul>
                 <div class="sidebar-footer">
                     <small>© Cybex Pulse v{{ version }}</small>
+                    <div class="update-badge {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}" id="update-badge">
+                        <a href="#" id="update-link">
+                            {% if update_disabled %}
+                                Updates Disabled
+                            {% elif update_available %}
+                                Update Available
+                            {% else %}
+                                Up to Date
+                            {% endif %}
+                        </a>
+                    </div>
                 </div>
             </nav>
         </div>
@@ -172,6 +183,84 @@
             });
         });
     </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const updateLink = document.getElementById('update-link');
+            const updateBadge = document.getElementById('update-badge');
+            
+            if (updateLink) {
+                updateLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Don't do anything if updates are disabled
+                    if (updateBadge.classList.contains('disabled')) {
+                        alert('Updates are disabled for non-git installations.');
+                        return;
+                    }
+                    
+                    if (updateBadge.classList.contains('up-to-date')) {
+                        // If up to date, just check for updates
+                        fetch('/check-update')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.update_available) {
+                                    updateBadge.classList.remove('up-to-date');
+                                    updateLink.innerHTML = 'Update Available';
+                                    
+                                    if (confirm('A new version of Pulse is available. Do you want to update?')) {
+                                        performUpdate();
+                                    }
+                                } else if (data.error && data.error.includes('not a git repository')) {
+                                    updateBadge.classList.add('disabled');
+                                    updateLink.innerHTML = 'Updates Disabled';
+                                    alert('Updates are disabled for non-git installations.');
+                                } else {
+                                    alert('Your system is up to date.');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                alert('Failed to check for updates: ' + error);
+                            });
+                    } else {
+                        // If update is available
+                        if (confirm('A new version of Pulse is available. Do you want to update?')) {
+                            performUpdate();
+                        }
+                    }
+                });
+            }
+            
+            function performUpdate() {
+                // Show loading indicator
+                updateLink.innerHTML = 'Updating...';
+                
+                // Call update API
+                fetch('/perform-update')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert('Update failed: ' + data.error);
+                            if (data.error.includes('not a git repository')) {
+                                updateBadge.classList.add('disabled');
+                                updateLink.innerHTML = 'Updates Disabled';
+                            } else {
+                                updateLink.innerHTML = 'Update Available';
+                            }
+                        } else {
+                            alert(data.message || 'Update successful. The application will restart shortly.');
+                            updateLink.innerHTML = 'Restarting...';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Update failed: ' + error);
+                        updateLink.innerHTML = 'Update Available';
+                    });
+            }
+        });
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

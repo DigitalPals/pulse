@@ -981,15 +981,23 @@ if ! command -v "\$PYTHON_CMD" &> /dev/null; then
 fi
 
 # Add the proper paths to PYTHONPATH
-if [ -d "cybex_pulse" ]; then
+if [ -d "/opt/pulse/cybex_pulse" ]; then
+    # We have the correct path
+    export PYTHONPATH="/opt/pulse:\$PYTHONPATH"
+elif [ -d "cybex_pulse" ]; then
     # We're in the repo directory
     export PYTHONPATH="$(pwd):\$PYTHONPATH"
 elif [ -d "pulse/cybex_pulse" ]; then
     # We're in a parent directory
     export PYTHONPATH="$(pwd)/pulse:\$PYTHONPATH"
 else
-    # Fallback
-    export PYTHONPATH="${INSTALL_DIR}:\$PYTHONPATH"
+    # Fallback - scan for the possible location
+    for path in "/opt/pulse" "/opt" "/usr/local/lib" "/usr/lib"; do
+        if [ -d "\$path/cybex_pulse" ]; then
+            export PYTHONPATH="\$path:\$PYTHONPATH"
+            break
+        fi
+    done
 fi
 
 # Fix for externally-managed-environment on newer Python installations
@@ -1019,6 +1027,13 @@ create_service() {
     # Get the current directory for the service file
     INSTALL_DIR=$(pwd)
     
+    # Create necessary system directories for logs and data
+    log_info "Creating system directories for logs and data..."
+    $SUDO_CMD mkdir -p /var/log/cybex_pulse 2>/dev/null || true
+    $SUDO_CMD mkdir -p /var/lib/cybex_pulse 2>/dev/null || true
+    $SUDO_CMD chmod 755 /var/log/cybex_pulse 2>/dev/null || true
+    $SUDO_CMD chmod 755 /var/lib/cybex_pulse 2>/dev/null || true
+    
     # Create systemd service file
     cat > /tmp/cybex-pulse.service << EOF
 [Unit]
@@ -1039,6 +1054,7 @@ StandardError=journal
 # Security hardening
 ProtectSystem=full
 ProtectHome=read-only
+ReadWritePaths=/var/log/cybex_pulse /var/lib/cybex_pulse
 NoNewPrivileges=true
 PrivateTmp=true
 CapabilityBoundingSet=CAP_NET_RAW
@@ -1218,6 +1234,19 @@ verify_installation() {
         log_success "Init.d service installed"
     else
         log_warning "No service installed, application will need to be started manually"
+    fi
+    
+    # Check system directories
+    if [ -d "/var/log/cybex_pulse" ]; then
+        log_success "Log directory created successfully at /var/log/cybex_pulse"
+    else
+        log_warning "Log directory not found at /var/log/cybex_pulse"
+    fi
+    
+    if [ -d "/var/lib/cybex_pulse" ]; then
+        log_success "Data directory created successfully at /var/lib/cybex_pulse"
+    else
+        log_warning "Data directory not found at /var/lib/cybex_pulse"
     fi
 }
 

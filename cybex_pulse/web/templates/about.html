@@ -12,7 +12,12 @@
     <div class="card-body">
         <div class="about-content">
             <h4>Version {{ version }}</h4>
-            <p>Cybex Pulse is a home network monitoring system designed to provide real-time insights into your network's devices, performance, and security.</p>
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <p style="margin-bottom: 0; flex: 1;">Cybex Pulse is a home network monitoring system designed to provide real-time insights into your network's devices, performance, and security.</p>
+                <button id="check-updates-btn" class="btn btn-secondary" style="white-space: nowrap; margin-left: 15px;">
+                    <i class="fas fa-sync-alt"></i> Check for Updates
+                </button>
+            </div>
             
             <h4>Features</h4>
             <ul>
@@ -90,6 +95,79 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkUpdatesBtn = document.getElementById('check-updates-btn');
+        
+        if (checkUpdatesBtn) {
+            checkUpdatesBtn.addEventListener('click', function() {
+                // Change button to loading state
+                const originalText = checkUpdatesBtn.innerHTML;
+                checkUpdatesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+                checkUpdatesBtn.disabled = true;
+                
+                // Call the update check API
+                fetch('/check-update')
+                    .then(response => response.json())
+                    .then(data => {
+                        checkUpdatesBtn.disabled = false;
+                        
+                        if (data.error) {
+                            alert('Error checking for updates: ' + data.error);
+                            checkUpdatesBtn.innerHTML = originalText;
+                            return;
+                        }
+                        
+                        if (data.update_available) {
+                            if (confirm('A new version is available. Do you want to update now?')) {
+                                // User wants to update, call the update API
+                                checkUpdatesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+                                checkUpdatesBtn.disabled = true;
+                                
+                                fetch('/perform-update')
+                                    .then(response => response.json())
+                                    .then(updateData => {
+                                        if (updateData.error) {
+                                            alert('Update failed: ' + updateData.error);
+                                            checkUpdatesBtn.innerHTML = originalText;
+                                            checkUpdatesBtn.disabled = false;
+                                        } else {
+                                            alert(updateData.message || 'Update successful. The application will restart shortly.');
+                                            checkUpdatesBtn.innerHTML = '<i class="fas fa-check"></i> Updated';
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        alert('Update failed. See console for details.');
+                                        checkUpdatesBtn.innerHTML = originalText;
+                                        checkUpdatesBtn.disabled = false;
+                                    });
+                            } else {
+                                // User doesn't want to update
+                                checkUpdatesBtn.innerHTML = '<i class="fas fa-exclamation-circle"></i> Update Available';
+                                setTimeout(() => {
+                                    checkUpdatesBtn.innerHTML = originalText;
+                                }, 3000);
+                            }
+                        } else {
+                            // No updates available
+                            checkUpdatesBtn.innerHTML = '<i class="fas fa-check"></i> Up to Date';
+                            setTimeout(() => {
+                                checkUpdatesBtn.innerHTML = originalText;
+                            }, 3000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Failed to check for updates. See console for details.');
+                        checkUpdatesBtn.innerHTML = originalText;
+                        checkUpdatesBtn.disabled = false;
+                    });
+            });
+        }
+    });
+</script>
+
 <style>
     .about-content {
         max-width: 800px;

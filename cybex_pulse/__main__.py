@@ -16,23 +16,57 @@ from cybex_pulse.utils.config import Config
 
 def setup_logging():
     """Configure application logging."""
-    log_dir = Path.home() / ".cybex_pulse" / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
+    # Try to use /var/log/cybex_pulse if running as a service, otherwise fallback to home directory
+    if os.access('/var/log', os.W_OK):
+        log_dir = Path('/var/log/cybex_pulse')
+    else:
+        log_dir = Path.home() / ".cybex_pulse" / "logs"
+    
+    # Create log directory if it doesn't exist
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        # If we can't create the log directory, use stderr only
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stderr)]
+        )
+        logger = logging.getLogger("cybex_pulse")
+        logger.warning("Could not create log directory. Logging to stderr only.")
+        return logger
     
     log_file = log_dir / "cybex_pulse.log"
     
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+    try:
+        file_handler = logging.FileHandler(log_file)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[
+                file_handler,
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+    except (PermissionError, OSError):
+        # If we can't write to the log file, use stderr only
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stderr)]
+        )
+        logger = logging.getLogger("cybex_pulse")
+        logger.warning(f"Could not write to log file {log_file}. Logging to stderr only.")
+        return logger
+    
     return logging.getLogger("cybex_pulse")
 
 def main():
     """Main function to start the Cybex Pulse application."""
+    # Explicitly import os inside the function to avoid any namespace issues
+    import os
+    from pathlib import Path
+    
     logger = setup_logging()
     logger.info("Starting Cybex Pulse v%s", __import__("cybex_pulse").__version__)
     
@@ -44,11 +78,24 @@ def main():
     args = parser.parse_args()
     
     # Initialize configuration
-    config_dir = Path.home() / ".cybex_pulse"
-    config_dir.mkdir(parents=True, exist_ok=True)
+    # Try to use /var/lib/cybex_pulse if running as a service, otherwise fallback to home directory
+    if os.access('/var/lib', os.W_OK):
+        data_dir = Path('/var/lib/cybex_pulse')
+    else:
+        data_dir = Path.home() / ".cybex_pulse"
     
-    config_path = args.config if args.config else config_dir / "config.json"
-    db_path = config_dir / "cybex_pulse.db"
+    logger.info(f"Using data directory: {data_dir}")
+    
+    # Create data directory if it doesn't exist
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        logger.error("Could not create data directory. Using home directory as fallback.")
+        data_dir = Path.home() / ".cybex_pulse"
+        data_dir.mkdir(parents=True, exist_ok=True)
+    
+    config_path = args.config if args.config else data_dir / "config.json"
+    db_path = data_dir / "cybex_pulse.db"
     
     # Initialize database
     db_manager = DatabaseManager(db_path)
