@@ -27,30 +27,9 @@ handle_error() {
     # Don't exit, just warn
 }
 
-# ANSI color codes based on web interface
-# Theme colors from Cybex Pulse web interface
-RED='\033[0;31m'            # --accent: #d93a3a;
-DARK_RED='\033[38;2;185;46;46m'  # --accent-dark: #b92e2e;
-GREEN='\033[38;2;76;175;80m'     # --success: #4CAF50;
-YELLOW='\033[38;2;255;193;7m'    # --warning: #FFC107;
-BLUE='\033[38;2;58;133;217m'     # --highlight-blue: #3a85d9;
-ORANGE='\033[38;2;255;152;0m'    # --orange: #FF9800;
-WHITE='\033[0;37m'          # --text: #ffffff;
-GRAY='\033[38;2;160;160;160m'    # --text-muted: #a0a0a0;
-DARK_BG='\033[48;2;26;26;26m'    # --main-bg: #1a1a1a;
-DARKER_BG='\033[48;2;14;14;14m'  # --sidebar-bg: #0e0e0e;
-NC='\033[0m'                # No Color
-BOLD='\033[1m'
-UNDERLINE='\033[4m'
-BLINK='\033[5m'
-
-# Special characters
-CHECK_MARK="✓"
-X_MARK="✗"
-ARROW="→"
-PULSE_SYMBOL="▮▯"
-GEAR="⚙"
-WAITING_SYMBOL="⟳"
+# No colors or special characters as requested
+NC=''
+BOLD=''
 
 # Configuration
 INSTALL_DIR="/opt/cybex-pulse"
@@ -61,117 +40,76 @@ SERVICE_NAME="cybex-pulse"
 
 # Functions
 print_cybex_logo() {
-    echo -e "${RED}"
-    echo -e "   ______      __                 ____        __         "
-    echo -e "  / ____/_  __/ /_  ___  _  __   / __ \\__  __/ /___ ___  "
-    echo -e " / /   / / / / __ \\/ _ \\| |/_/  / /_/ / / / / / __ \`/ _ \\ "
-    echo -e "/ /___/ /_/ / /_/ /  __/>  <   / ____/ /_/ / / /_/ /  __/ "
-    echo -e "\\____/\\__, /_.___/\\___/_/|_|  /_/    \\__,_/_/\\__,_/\\___/  "
-    echo -e "     /____/                                               "
-    echo -e "${NC}"
+    echo
+    echo "_________        ___.                   __________      .__                 "
+    echo "\_   ___ \___.__.\_ |__   ____ ___  ___ \______   \__ __|  |   ______ ____  "
+    echo "/    \  \<   |  | | __ \_/ __ \\  \/  /  |     ___/  |  \  |  /  ___// __ \ "
+    echo "\     \___\___  | | \_\ \  ___/ >    <   |    |   |  |  /  |__\___ \\  ___/ "
+    echo " \______  / ____| |___  /\___  >__/\_ \  |____|   |____/|____/____  >\___  >"
+    echo "        \/\/          \/     \/      \/                           \/     \/ "
+    echo
 }
 
 print_header() {
     clear
     print_cybex_logo
     
-    echo -e "${DARK_BG}${RED}┌────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${DARK_BG}${RED}│  ${BOLD}${WHITE}Network Monitoring Installation                          ${RED}│${NC}"
-    echo -e "${DARK_BG}${RED}│  ${GRAY}Version 1.0.0                                            ${RED}│${NC}"
-    echo -e "${DARK_BG}${RED}└────────────────────────────────────────────────────────────┘${NC}"
+    echo "---------------------------------------------------"
+    echo "  Network Monitoring Installation"
+    echo "  Version 1.0.0"
+    echo "---------------------------------------------------"
     echo
-
-    # Simple animation without text overlap issues
-    echo -e "${GRAY}Initializing installation${NC}"
-    printf "  "
-    for i in {1..5}; do
-        printf "${BLUE}▮${NC}"
-        sleep 0.1
-        printf "\b${BLUE}▯${NC}"
-        sleep 0.1
-        printf "\b"
-    done
-    echo -e "\n"
+    echo "Initializing installation..."
+    echo
 }
 
 show_spinner() {
     local pid=$1
     local delay=0.1
-    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' # Braille pattern spinner (smoother)
+    local spinstr='/-\|'
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
-        printf " ${BLUE}%c${NC}  " "${spinstr:0:1}"
+        printf " %c  " "${spinstr:0:1}"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\b\b\b\b\b"
+        printf "\b\b\b\b"
     done
     printf "    \b\b\b\b"
 }
 
-animate_progress() {
-    local text=$1
-    local duration=$2
-    local frames=("${PULSE_SYMBOL}" " ${PULSE_SYMBOL}" "  ${PULSE_SYMBOL}" "   ${PULSE_SYMBOL}" "    ${PULSE_SYMBOL}" "     ${PULSE_SYMBOL}")
-    local frames_count=${#frames[@]}
-    local start_time=$(date +%s)
-    local end_time=$((start_time + duration))
-    
-    echo -ne "${BOLD}${text}${NC}"
-    
-    while [ $(date +%s) -lt $end_time ]; do
-        for (( i=0; i<frames_count; i++ )); do
-            echo -ne "\r${BOLD}${text}${NC} ${BLUE}${frames[$i]}${NC}"
-            sleep 0.1
-            if [ $(date +%s) -ge $end_time ]; then
-                break
-            fi
-        done
-    done
-    echo
-}
-
 progress() {
     local text=$1
-    printf "${BOLD}${BLUE}→ %-50s${NC}" "${text}..."
+    printf "%-50s" "${text}..."
 }
 
 success() {
-    printf "${GREEN}${CHECK_MARK} Success${NC}\n"
+    printf "[SUCCESS]\n"
     echo "SUCCESS: $1" >> $LOG_FILE
 }
 
 error() {
-    printf "${RED}${X_MARK} Failed${NC}\n"
+    printf "[FAILED]\n"
     echo "ERROR: $1" >> $LOG_FILE
     echo
     if [ "$2" = "fatal" ]; then
-        echo -e "${RED}${BOLD}Installation failed. Please check the error above.${NC}"
+        echo "Installation failed. Please check the error above."
         exit 1
     else
-        echo -e "${YELLOW}Continuing with installation despite error...${NC}"
+        echo "Continuing with installation despite error..."
         # Don't exit, try to continue
     fi
 }
 
 warning() {
-    echo -e "${ORANGE}${BOLD}⚠️  $1${NC}"
+    echo "WARNING: $1"
     echo "WARNING: $1" >> $LOG_FILE
-}
-
-show_task_result() {
-    local result=$1
-    if [ "$result" = "true" ]; then
-        echo -e "${GREEN}${CHECK_MARK}${NC}"
-    else
-        echo -e "${RED}${X_MARK}${NC}"
-    fi
 }
 
 install_package() {
     local package=$1
     local package_manager=$2
     
-    printf "  %-25s" "Installing ${package}..."
+    printf "  %-40s" "Installing ${package}..."
     echo "Trying to install: $package with $package_manager" >> $LOG_FILE
     
     case $package_manager in
@@ -195,11 +133,11 @@ install_package() {
     local result=$?
     
     if [ $result -eq 0 ]; then
-        echo -e "${GREEN}${CHECK_MARK} Success${NC}"
+        echo "[SUCCESS]"
         echo "SUCCESS: Installed $package" >> $LOG_FILE
         return 0
     else
-        echo -e "${RED}${X_MARK} Failed${NC}"
+        echo "[FAILED]"
         echo "FAILED: Could not install $package" >> $LOG_FILE
         return 1
     fi
@@ -208,29 +146,10 @@ install_package() {
 step() {
     local step_num=$1
     local description=$2
-    local step_percentage=$((step_num * 100 / TOTAL_STEPS))
-    local progress_bar_width=40
     
-    # Calculate how many filled blocks
-    local filled_width=$((progress_bar_width * step_num / TOTAL_STEPS))
-    local empty_width=$((progress_bar_width - filled_width))
-    
-    # Create the progress bar
-    local progress_bar=""
-    for ((i=0; i<filled_width; i++)); do
-        progress_bar="${progress_bar}▓"
-    done
-    
-    for ((i=0; i<empty_width; i++)); do
-        progress_bar="${progress_bar}░"
-    done
-    
-    # Just display header without animation to prevent overrun
-    echo -e "\n${RED}${BOLD}⚙ ${description}${NC}"
-    
-    # Display progress bar
-    echo -e "${DARK_BG}  [${RED}${progress_bar}${WHITE}] ${step_percentage}%${NC}"
-    echo -e "${GRAY}  Step ${step_num} of ${TOTAL_STEPS}${NC}\n"
+    echo
+    echo "STEP $step_num/$TOTAL_STEPS: $description"
+    echo "---------------------------------------------------"
 }
 
 check_distribution() {
@@ -792,64 +711,15 @@ EOF
 configure_app() {
     progress "Configuring application"
     
-    # Create default configuration
+    # Create config directory but don't create config.json
     mkdir -p $CONFIG_DIR
     
-    # Create empty configuration if it doesn't exist
-    if [ ! -f $CONFIG_DIR/config.json ]; then
-        cat > $CONFIG_DIR/config.json << EOF
-{
-  "general": {
-    "scan_interval": 300
-  },
-  "network": {
-    "subnet": "192.168.1.0/24"
-  },
-  "web_interface": {
-    "enabled": true,
-    "host": "0.0.0.0",
-    "port": 8000
-  },
-  "alerts": {
-    "enabled": false,
-    "new_device": true,
-    "device_offline": false,
-    "important_device_offline": true,
-    "latency_threshold": 100,
-    "website_error": true
-  },
-  "monitoring": {
-    "internet_health": {
-      "enabled": true,
-      "interval": 3600
-    },
-    "websites": {
-      "enabled": false,
-      "interval": 300,
-      "urls": []
-    },
-    "security": {
-      "enabled": false,
-      "interval": 86400
-    }
-  },
-  "fingerprinting": {
-    "enabled": true,
-    "confidence_threshold": 0.5,
-    "max_threads": 10,
-    "timeout": 2
-  }
-}
-EOF
-    fi
+    # Create directory structure for user config
+    mkdir -p /home/$SERVICE_USER/.cybex_pulse
     
     # Set proper permissions
-    chown $SERVICE_USER:$SERVICE_USER $CONFIG_DIR/config.json
-    chmod 640 $CONFIG_DIR/config.json
-    
-    # Create symlink to config directory
-    mkdir -p /home/$SERVICE_USER/.cybex_pulse
-    ln -sf $CONFIG_DIR/config.json /home/$SERVICE_USER/.cybex_pulse/config.json
+    chown -R $SERVICE_USER:$SERVICE_USER $CONFIG_DIR
+    chown -R $SERVICE_USER:$SERVICE_USER /home/$SERVICE_USER/.cybex_pulse
     
     success "Application configured"
 }
@@ -872,80 +742,44 @@ print_completion() {
     # Show logo again
     print_cybex_logo
     
-    # Animated success message
-    local success_msg="Installation Complete!"
-    echo -ne "${GREEN}${BOLD}"
-    for (( i=0; i<${#success_msg}; i++ )); do
-        echo -ne "${success_msg:$i:1}"
-        sleep 0.05
-    done
-    echo -e "${NC}\n"
-    
-    # Success message
-    echo -e "${GREEN}"
-    echo -e "  ┌─────────────────────────────────────────┐"
-    echo -e "  │             INSTALLATION                │"
-    echo -e "  │               COMPLETE                  │"
-    echo -e "  └─────────────────────────────────────────┘"
-    echo -e "${NC}\n"
-    
-    # Create fancy box
-    local box_width=70
-    local horizontal_line=""
-    for ((i=0; i<box_width; i++)); do
-        horizontal_line="${horizontal_line}═"
-    done
-    
-    echo -e "${RED}╔${horizontal_line}╗${NC}"
-    echo -e "${RED}║${DARK_BG}${WHITE}  Cybex Pulse has been successfully installed on your system!${GRAY}                  ${RED}║${NC}"
-    echo -e "${RED}╚${horizontal_line}╝${NC}"
+    echo "INSTALLATION COMPLETED SUCCESSFULLY"
+    echo "---------------------------------------------------"
     echo
     
-    # Access information with icons
-    echo -e "${WHITE}${BOLD}🌐 Access Information${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Web Interface: ${GREEN}http://$(hostname -I | awk '{print $1}'):8000${NC}"
+    # Access information
+    echo "ACCESS INFORMATION"
+    echo "  Web Interface: http://$(hostname -I | awk '{print $1}'):8000"
     echo
     
-    # Service management with styled command boxes
-    echo -e "${WHITE}${BOLD}⚙️  Service Management${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Start service:   ${DARK_BG}${RED} sudo systemctl start $SERVICE_NAME ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Stop service:    ${DARK_BG}${RED} sudo systemctl stop $SERVICE_NAME ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Restart service: ${DARK_BG}${RED} sudo systemctl restart $SERVICE_NAME ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Check status:    ${DARK_BG}${RED} sudo systemctl status $SERVICE_NAME ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} View logs:       ${DARK_BG}${RED} sudo journalctl -u $SERVICE_NAME ${NC}"
+    # Service management
+    echo "SERVICE MANAGEMENT"
+    echo "  Start service:    sudo systemctl start $SERVICE_NAME"
+    echo "  Stop service:     sudo systemctl stop $SERVICE_NAME"
+    echo "  Restart service:  sudo systemctl restart $SERVICE_NAME"
+    echo "  Check status:     sudo systemctl status $SERVICE_NAME"
+    echo "  View logs:        sudo journalctl -u $SERVICE_NAME"
     echo
     
     # Configuration information
-    echo -e "${WHITE}${BOLD}🔧 Configuration${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Config file:     ${DARK_BG}${RED} $CONFIG_DIR/config.json ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Log directory:   ${DARK_BG}${RED} $LOG_DIR ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Install log:     ${DARK_BG}${RED} $LOG_FILE ${NC}"
+    echo "LOG FILES"
+    echo "  Log directory:    $LOG_DIR"
+    echo "  Install log:      $LOG_FILE"
     echo
     
     # Next steps
-    echo -e "${WHITE}${BOLD}🔍 Next Steps${NC}"
-    echo -e "  ${ORANGE}${BOLD}⚠️${NC}  If this is your first time running Cybex Pulse,"
-    echo -e "      you'll need to complete the setup wizard in the web interface."
+    echo "NEXT STEPS"
+    echo "  If this is your first time running Cybex Pulse,"
+    echo "  you'll need to complete the setup wizard in the web interface."
     echo
     
     # Troubleshooting
-    echo -e "${WHITE}${BOLD}❓ Troubleshooting${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Check installation log: ${DARK_BG}${RED} cat $LOG_FILE ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} Check service status:   ${DARK_BG}${RED} sudo systemctl status $SERVICE_NAME ${NC}"
-    echo -e "  ${BLUE}${ARROW}${NC} View service logs:      ${DARK_BG}${RED} sudo journalctl -u $SERVICE_NAME ${NC}"
+    echo "TROUBLESHOOTING"
+    echo "  Check installation log:  cat $LOG_FILE"
+    echo "  Check service status:    sudo systemctl status $SERVICE_NAME"
+    echo "  View service logs:       sudo journalctl -u $SERVICE_NAME"
     echo
     
-    # Thank you message
-    echo -e "${GREEN}${BOLD}Thank you for installing Cybex Pulse!${NC}"
-    
-    # Animated pulse at the end
-    for ((i=0; i<3; i++)); do
-        echo -ne "${RED}▮${NC}"
-        sleep 0.2
-        echo -ne "\b${RED}▯${NC}"
-        sleep 0.2
-        echo -ne "\b"
-    done
+    echo "Thank you for installing Cybex Pulse!"
     echo
 }
 
