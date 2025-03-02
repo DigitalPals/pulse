@@ -3,9 +3,7 @@
   
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-    <a href="https://github.com/cybex/Pulse"><img src="https://img.shields.io/badge/Version-1.0.0-green.svg" alt="Version"></a>
-    <a href="https://github.com/cybex/Pulse/issues"><img src="https://img.shields.io/github/issues/DigitalPals/pulse?color=red" alt="Issues"></a>
-    <a href="https://github.com/cybex/Pulse/stargazers"><img src="https://img.shields.io/github/stars/DigitalPals/pulse?color=yellow" alt="Stars"></a>
+    <a href="https://github.com/DigitalPals/pulse"><img src="https://img.shields.io/badge/Version-1.0.0-green.svg" alt="Version"></a>
   </p>
 </div>
 
@@ -28,56 +26,36 @@
 
 ```bash
 # One-line installation (Debian/Ubuntu)
-curl -sSL https://get.cybex.net/pulse | sudo bash
+curl -sSL https://github.com/DigitalPals/pulse/install.sh | sudo bash
 
 # Access the web interface
 # http://YOUR_IP_ADDRESS:8000
-# Username: admin
-# Password: cybexpulse
 ```
 
 ---
 
 ## 🚀 Features
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3>🔍 Network Discovery</h3>
-      <p>Automatically detect and monitor all devices on your network with intelligent periodic scanning</p>
-    </td>
-    <td width="50%">
-      <h3>👆 Device Fingerprinting</h3>
-      <p>Identify device types, vendors, and models through advanced classification algorithms</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>📊 Internet Health</h3>
-      <p>Track speed, latency, and reliability over time with detailed historical metrics</p>
-    </td>
-    <td width="50%">
-      <h3>🌐 Website Monitoring</h3>
-      <p>Monitor the availability of your important websites and receive alerts when they're down</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>🔐 Security Scanning</h3>
-      <p>Detect potential security vulnerabilities and unprotected devices on your network</p>
-    </td>
-    <td width="50%">
-      <h3>⚡ Real-time Alerts</h3>
-      <p>Get notified when new devices join, important devices go offline, or security issues arise</p>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <h3>✨ Beautiful Dashboard</h3>
-      <p>Intuitive web interface for managing all aspects of your network with responsive design for mobile and desktop</p>
-    </td>
-  </tr>
-</table>
+### 🔍 Network Discovery
+Automatically detect and monitor all devices on your network with intelligent periodic scanning that helps you identify every device connected to your home network.
+
+### 👆 Device Fingerprinting
+Identify device types, vendors, and models through advanced classification algorithms that can recognize thousands of different devices.
+
+### 📊 Internet Health
+Track speed, latency, and reliability over time with detailed historical metrics to ensure your internet connection is performing as expected.
+
+### 🌐 Website Monitoring
+Monitor the availability of your important websites and receive alerts when they're down, ensuring you're always aware of service disruptions.
+
+### 🔐 Security Scanning
+Detect potential security vulnerabilities and unprotected devices on your network to help safeguard your home against threats.
+
+### ⚡ Real-time Alerts
+Get notified when new devices join, important devices go offline, or security issues arise, giving you complete visibility into your network.
+
+### ✨ Beautiful Dashboard
+Intuitive web interface for managing all aspects of your network with responsive design for mobile and desktop, making network management easy.
 
 ## 📋 Requirements
 
@@ -276,18 +254,10 @@ The configuration file supports the following advanced options:
       <td><strong>Default URL</strong></td>
       <td>http://YOUR_IP_ADDRESS:8000</td>
     </tr>
-    <tr>
-      <td><strong>Default Credentials</strong></td>
-      <td>Username: <code>admin</code> / Password: <code>cybexpulse</code></td>
-    </tr>
-    <tr>
-      <td><strong>First-time Login</strong></td>
-      <td>You'll be prompted to change the default password</td>
-    </tr>
   </table>
 </div>
 
-<p align="center">⚠️ <strong>IMPORTANT:</strong> Change the default password immediately after installation</p>
+<p align="center">The web interface provides access to all monitoring features and configuration options</p>
 
 ## 🔐 Security Considerations
 
@@ -339,26 +309,6 @@ When running Cybex Pulse in a Proxmox container, you need to ensure the containe
 
 3. **Additional Network Configuration**:
    - Ensure the container has its own network interface in bridge mode
-</details>
-
-<details>
-<summary><strong>Running on Synology NAS</strong></summary>
-
-Cybex Pulse can be installed on Synology NAS devices using Docker:
-
-1. Install the Docker package from Synology Package Center
-2. Open Docker and go to Registry
-3. Search for "cybex/pulse" and download the latest image
-4. Create a container with the following settings:
-   - Use host network
-   - Add volume mapping: `/volume1/docker/cybex-pulse:/opt/cybex-pulse/data`
-   - Add environment variables:
-     - `TZ=your_timezone`
-     - `PULSE_WEB_PORT=8000` (or your preferred port)
-   - Add capability: NET_ADMIN, NET_RAW
-5. Start the container
-
-You can access the web interface at http://your_synology_ip:8000
 </details>
 
 ## 📊 Screenshots
