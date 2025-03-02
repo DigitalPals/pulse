@@ -32,6 +32,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 BOLD='\033[1m'
+CYAN='\033[0;36m'
 
 # Configuration
 INSTALL_DIR="/opt/cybex-pulse"
@@ -53,7 +54,6 @@ print_cybex_logo() {
 }
 
 print_header() {
-    clear
     print_cybex_logo
     
     echo "---------------------------------------------------"
@@ -730,7 +730,8 @@ start_service() {
 }
 
 print_completion() {
-    # Show logo again
+    echo
+    # Show logo again - without clearing the screen
     print_cybex_logo
     
     echo "INSTALLATION COMPLETED SUCCESSFULLY"
