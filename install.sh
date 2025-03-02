@@ -906,19 +906,39 @@ copy_repository_files() {
             echo -ne "${ARROW} ${CYAN}Installing Python package...${NC} "
             echo "Installing Python package..." >> $LOG_FILE
             cd $INSTALL_DIR
+            # First make sure we have all __init__.py files to prevent import errors
+            find . -type d -not -path "*/\.*" -not -path "*/venv*" -exec touch {}/__init__.py \; >> $LOG_FILE 2>&1
+            
+            # Try to install the package
             if $INSTALL_DIR/venv/bin/pip install -e . >> $LOG_FILE 2>&1; then
                 echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
                 echo "SUCCESS: Installed Python package" >> $LOG_FILE
                 
+                # Set PYTHONPATH to ensure the module can be found
+                echo "Setting PYTHONPATH in virtual environment..." >> $LOG_FILE
+                echo "export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH" >> $INSTALL_DIR/venv/bin/activate
+                source $INSTALL_DIR/venv/bin/activate
+                
                 # Verify module can be imported
                 echo -ne "${ARROW} ${CYAN}Verifying Cybex Pulse module...${NC} "
-                if $INSTALL_DIR/venv/bin/python -c "import cybex_pulse; print('Module imported successfully')" >> $LOG_FILE 2>&1; then
+                IMPORT_ERROR=$($INSTALL_DIR/venv/bin/python -c "
+try:
+    import cybex_pulse
+    print('Module imported successfully')
+except Exception as e:
+    import sys
+    print(f'Import error: {str(e)}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
+                
+                if [ $? -eq 0 ]; then
                     echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
                     echo "SUCCESS: Cybex Pulse module verified" >> $LOG_FILE
                 else
                     echo -e "${CROSS_MARK} ${RED}Failed${NC}"
                     echo "FAILED: Could not import Cybex Pulse module" >> $LOG_FILE
-                    warning "Failed to verify Cybex Pulse module, the installation may be incomplete"
+                    echo "Error details: $IMPORT_ERROR" >> $LOG_FILE
+                    warning "Failed to verify Cybex Pulse module: ${IMPORT_ERROR}"
                 fi
             else
                 echo -e "${CROSS_MARK} ${RED}Failed${NC}"
@@ -1041,13 +1061,43 @@ verify_module_installation() {
     
     # Try to import the module
     echo -ne "${ARROW} ${CYAN}Testing module import...${NC} "
-    if $INSTALL_DIR/venv/bin/python -c "import cybex_pulse; print('Module imported successfully')" >> $LOG_FILE 2>&1; then
+    # Save the import error to the log to help with debugging
+    IMPORT_ERROR=$($INSTALL_DIR/venv/bin/python -c "
+try:
+    import cybex_pulse
+    print('Module imported successfully')
+except Exception as e:
+    import sys
+    print(f'Import error: {str(e)}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
+    
+    if [ $? -eq 0 ]; then
         echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
         echo "SUCCESS: Cybex Pulse module imported successfully" >> $LOG_FILE
     else
         echo -e "${CROSS_MARK} ${RED}Failed${NC}"
         echo "FAILED: Could not import Cybex Pulse module" >> $LOG_FILE
-        warning "Failed to import Cybex Pulse module. The application may not work correctly."
+        echo "Error details: $IMPORT_ERROR" >> $LOG_FILE
+        warning "Failed to import Cybex Pulse module: ${IMPORT_ERROR}"
+        
+        # Try to fix common installation issues
+        echo -ne "${ARROW} ${CYAN}Attempting to fix module installation...${NC} "
+        cd $INSTALL_DIR
+        $INSTALL_DIR/venv/bin/pip install -e . --no-deps >> $LOG_FILE 2>&1
+        
+        # Verify PYTHONPATH includes installation directory
+        echo "export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH" >> $INSTALL_DIR/venv/bin/activate
+        
+        # Try import again after fix attempt
+        if $INSTALL_DIR/venv/bin/python -c "import cybex_pulse; print('Module now imported successfully')" >> $LOG_FILE 2>&1; then
+            echo -e "${CHECK_MARK} ${GREEN}Fixed${NC}"
+            echo "SUCCESS: Fixed Cybex Pulse module import" >> $LOG_FILE
+        else
+            echo -e "${CROSS_MARK} ${RED}Still failing${NC}"
+            echo "FAILED: Could not fix module import" >> $LOG_FILE
+            warning "The application may not work correctly. Check the log for details."
+        fi
     fi
     
     # Test executable
