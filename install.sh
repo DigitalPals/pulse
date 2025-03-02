@@ -5,8 +5,23 @@
 # This script installs Cybex Pulse on various Linux distributions
 ##############################################################
 
-# Exit on errors
-set -e
+# Error handling - don't exit immediately, allow for cleanup and error reporting
+set -o pipefail
+
+# Define a trap for error handling
+error_handler() {
+    local line=$1
+    local command=$2
+    local code=$3
+    log_error "Error occurred at line $line, command: '$command' exited with status: $code"
+    echo -e "\n${RED}${BOLD}Installation failed!${NC}"
+    echo -e "Please check the log file at ${LOG_FILE} for details."
+    echo -e "You can report issues at: https://github.com/DigitalPals/pulse/issues"
+    exit 1
+}
+
+# Set up trap to catch errors
+trap 'error_handler ${LINENO} "$BASH_COMMAND" $?' ERR
 
 # Colors and formatting
 GREEN='\033[0;32m'
@@ -23,6 +38,9 @@ INFO_MARK="\033[0;34mℹ\033[0m"
 LOG_FILE="/tmp/cybex-pulse-install.log"
 REPO_URL="https://github.com/DigitalPals/pulse.git"
 REQUIREMENTS_FILE="cybex_pulse/requirements.txt"
+VERBOSE="false"
+
+# The command line arguments are now processed in the process_args function
 
 # Initialize log file
 echo "Cybex Pulse Installation Log - $(date)" > $LOG_FILE
@@ -40,10 +58,20 @@ log_success() {
 }
 
 log_error() {
-    echo -e "${CROSS_MARK} ${RED}$1${NC}"
+    echo -e "${CROSS_MARK} ${RED}${BOLD}ERROR:${NC} ${RED}$1${NC}"
     echo "[ERROR] $1" >> $LOG_FILE
+    
     if [ "$2" = "fatal" ]; then
+        echo -e "\n${RED}${BOLD}Installation failed!${NC}"
+        echo -e "Please check the log file at ${LOG_FILE} for details."
+        echo -e "You can report issues at: https://github.com/DigitalPals/pulse/issues"
         exit 1
+    fi
+    
+    # Show the last few lines of the log if verbose
+    if [ "$VERBOSE" = "true" ]; then
+        echo -e "${YELLOW}Last 5 log entries:${NC}"
+        tail -n 5 "$LOG_FILE" | sed 's/^/  /'
     fi
 }
 
@@ -258,54 +286,152 @@ install_system_packages() {
         case $DISTRO_FAMILY in
             debian)
                 log_info "Installing Python packages via apt..."
-                apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                # Try correct package names first
+                if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                    log_warning "Could not install packages with standard names, trying alternative package names..."
+                    # Fallback to alternative package names
+                    apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        log_error "Failed to install Python packages via apt. See log for details."
+                        cat $LOG_FILE | tail -n 20
+                        exit 1
+                    }
+                fi
                 ;;
                 
             redhat)
                 if [ "$DISTRO" = "fedora" ]; then
                     log_info "Installing Python packages via dnf..."
-                    dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first
+                    if ! dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        # Fallback to alternative package names
+                        dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via dnf. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 else
                     log_info "Installing Python packages via yum..."
-                    yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first
+                    if ! yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        # Fallback to alternative package names
+                        yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via yum. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 fi
                 ;;
                 
             arch)
                 log_info "Installing Python packages via pacman..."
-                pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1
+                pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1 || {
+                    log_error "Failed to install Python packages via pacman. See log for details."
+                    cat $LOG_FILE | tail -n 20
+                    exit 1
+                }
                 ;;
                 
             suse)
                 log_info "Installing Python packages via zypper..."
-                zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                # Try correct package names first
+                if ! zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                    log_warning "Could not install packages with standard names, trying alternative package names..."
+                    # Fallback to alternative package names
+                    zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                        log_error "Failed to install Python packages via zypper. See log for details."
+                        cat $LOG_FILE | tail -n 20
+                        exit 1
+                    }
+                fi
                 ;;
                 
             unknown)
                 log_warning "Unknown distribution family. Attempting to install packages with available package manager..."
                 if command -v apt-get > /dev/null; then
-                    apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first for apt
+                    if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via apt. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 elif command -v dnf > /dev/null; then
-                    dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first for dnf
+                    if ! dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via dnf. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 elif command -v yum > /dev/null; then
-                    yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first for yum
+                    if ! yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via yum. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 elif command -v pacman > /dev/null; then
-                    pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1
+                    pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1 || {
+                        log_error "Failed to install Python packages via pacman. See log for details."
+                        cat $LOG_FILE | tail -n 20
+                        exit 1
+                    }
                 elif command -v zypper > /dev/null; then
-                    zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                    # Try correct package names first for zypper
+                    if ! zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                        log_warning "Could not install packages with standard names, trying alternative package names..."
+                        zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
+                            log_error "Failed to install Python packages via zypper. See log for details."
+                            cat $LOG_FILE | tail -n 20
+                            exit 1
+                        }
+                    fi
                 else
                     log_error "No supported package manager found. Cannot install Python packages." "fatal"
                 fi
                 ;;
         esac
         
-        # Verify installation
-        if ! $PYTHON_CMD -c "import flask" 2>/dev/null || \
-           ! $PYTHON_CMD -c "import telegram" 2>/dev/null || \
-           ! $PYTHON_CMD -c "import nmap" 2>/dev/null || \
-           ! $PYTHON_CMD -c "import speedtest" 2>/dev/null || \
-           ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
-            log_error "Failed to install all required Python packages. Please install them manually." "fatal"
+        # Verify installation with detailed feedback
+        MISSING=""
+        if ! $PYTHON_CMD -c "import flask" 2>/dev/null; then
+            MISSING="${MISSING}flask "
+        fi
+        if ! $PYTHON_CMD -c "import telegram" 2>/dev/null; then
+            MISSING="${MISSING}telegram "
+        fi
+        if ! $PYTHON_CMD -c "import nmap" 2>/dev/null; then
+            MISSING="${MISSING}nmap "
+        fi
+        if ! $PYTHON_CMD -c "import speedtest" 2>/dev/null; then
+            MISSING="${MISSING}speedtest "
+        fi
+        if ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
+            MISSING="${MISSING}requests "
+        fi
+        
+        # If any packages are missing, provide detailed error message
+        if [ -n "$MISSING" ]; then
+            log_error "Failed to install the following Python packages: ${MISSING}"
+            log_error "Please install them manually using your system's package manager." 
+            log_error "For example, on Debian/Ubuntu: sudo apt-get install python3-flask python3-python-telegram-bot" 
+            log_error "Check the log file for details: $LOG_FILE"
+            if [ "$VERBOSE" = "true" ]; then
+                echo -e "\n${YELLOW}Package install log:${NC}"
+                cat $LOG_FILE | grep -A 10 -B 10 "Installing Python packages" | tail -n 30
+            fi
+            exit 1
         fi
     else
         log_success "All required Python packages are already installed"
@@ -406,31 +532,85 @@ print_completion() {
     
     echo -e "\n${GREEN}${BOLD}Cybex Pulse Installation Completed!${NC}\n"
     
-    echo "Installation Details:"
-    echo "  - Repository: $INSTALL_DIR"
-    echo "  - Log File: $LOG_FILE"
+    echo -e "${BLUE}Installation Details:${NC}"
+    echo -e "  - ${BOLD}Repository:${NC} $INSTALL_DIR"
+    echo -e "  - ${BOLD}Log File:${NC} $LOG_FILE"
     echo
     
-    echo "Usage Instructions:"
-    echo "  - Run the application manually: $INSTALL_DIR/pulse"
+    # Try to get the IP address
+    IP_ADDRESS=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+    if [ -z "$IP_ADDRESS" ]; then
+        IP_ADDRESS="YOUR_IP_ADDRESS"
+    fi
+    
+    echo -e "${GREEN}Usage Instructions:${NC}"
+    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/pulse"
     
     if [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
-        echo "  - Start as a service: sudo systemctl start cybex-pulse"
-        echo "  - Enable at boot: sudo systemctl enable cybex-pulse"
-        echo "  - Check service status: sudo systemctl status cybex-pulse"
+        echo -e "  - ${BOLD}Start as a service:${NC} sudo systemctl start cybex-pulse"
+        echo -e "  - ${BOLD}Enable at boot:${NC} sudo systemctl enable cybex-pulse"
+        echo -e "  - ${BOLD}Check service status:${NC} sudo systemctl status cybex-pulse"
     fi
     
     echo
-    echo "After starting, access the web interface at http://YOUR_IP_ADDRESS:8000"
+    echo -e "${YELLOW}${BOLD}Web Interface:${NC}"
+    echo -e "  After starting, access the web interface at ${BLUE}http://$IP_ADDRESS:8000${NC}"
     echo
-    echo "For issues or more information, visit: https://github.com/DigitalPals/pulse"
+    echo -e "${BLUE}For issues or more information, visit:${NC} ${BOLD}https://github.com/DigitalPals/pulse${NC}"
     echo
+    
+    if [ "$VERBOSE" = "true" ]; then
+        echo -e "${YELLOW}Installation Log Summary:${NC}"
+        echo -e "  You can view the full log at: $LOG_FILE"
+        echo
+        echo -e "${YELLOW}Last 10 installation log entries:${NC}"
+        tail -n 10 "$LOG_FILE" | sed 's/^/  /'
+        echo
+    fi
+}
+
+# Display usage information
+display_help() {
+    echo -e "${BOLD}${BLUE}Cybex Pulse Installation Script${NC}"
+    echo -e "${BLUE}====================================${NC}\n"
+    echo -e "Usage: $0 [OPTIONS]"
+    echo
+    echo -e "Options:"
+    echo -e "  -v, --verbose      Enable verbose output (show detailed logs)"
+    echo -e "  -h, --help         Display this help message"
+    echo
+    echo -e "Example:"
+    echo -e "  sudo $0 --verbose"
+    echo
+    echo -e "For issues or more information, visit: https://github.com/DigitalPals/pulse"
+    exit 0
+}
+
+# Process command line arguments
+process_args() {
+    for arg in "$@"; do
+        case $arg in
+            -h|--help)
+                display_help
+                ;;
+            -v|--verbose)
+                VERBOSE="true"
+                echo -e "${YELLOW}Verbose mode enabled. Detailed output will be shown.${NC}"
+                ;;
+            *)
+                # Skip unknown arguments
+                ;;
+        esac
+    done
 }
 
 # Main function
 main() {
     echo -e "${BOLD}${BLUE}Cybex Pulse Installation${NC}"
     echo -e "${BLUE}=============================${NC}\n"
+    
+    # Process command line arguments
+    process_args "$@"
     
     # Check if script is running as root
     if [ "$EUID" -ne 0 ]; then
@@ -459,6 +639,6 @@ main() {
     print_completion
 }
 
-# Execute main function
-main
+# Execute main function with all arguments
+main "$@"
 exit 0
