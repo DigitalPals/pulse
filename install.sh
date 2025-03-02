@@ -7,6 +7,17 @@
 
 set -e
 
+# Enable better error handling
+trap 'handle_error $? $LINENO' ERR
+
+handle_error() {
+    local exit_code=$1
+    local line_number=$2
+    echo -e "\n\033[0;31m✗ Error occurred at line $line_number (exit code $exit_code)\033[0m"
+    echo -e "\033[0;31mInstallation failed. Check error details above.\033[0m"
+    exit $exit_code
+}
+
 # ANSI color codes
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -113,56 +124,88 @@ check_distribution() {
 install_dependencies() {
     progress "Installing system dependencies"
     
+    # Create a log file for installation details
+    LOG_FILE="/tmp/cybex-pulse-install.log"
+    echo "Cybex Pulse Installation Log - $(date)" > $LOG_FILE
+    
     case $DISTRO_FAMILY in
         debian)
-            # Capture output but don't display it
+            # Capture detailed output to log file
             {
+                echo "Running apt-get update..." >> $LOG_FILE
                 apt-get update -qq
+                
+                echo "Installing dependencies..." >> $LOG_FILE
                 apt-get install -y -qq python3 python3-pip python3-venv nmap net-tools arp-scan iproute2 \
-                                    avahi-utils snmp net-snmp-tools
-            } > /dev/null 2>&1 || error "Failed to install dependencies"
+                                  avahi-utils snmp net-snmp-tools curl
+            } >> $LOG_FILE 2>&1 || {
+                echo "Failed to install dependencies. Check $LOG_FILE for details."
+                error "Failed to install dependencies (see $LOG_FILE for details)"
+            }
             ;;
         redhat)
             {
+                echo "Installing dependencies for RedHat-based system..." >> $LOG_FILE
                 if [ "$DISTRO" = "fedora" ]; then
-                    dnf install -y python3 python3-pip nmap net-tools arp-scan iproute net-snmp-utils avahi-tools
+                    dnf install -y python3 python3-pip nmap net-tools arp-scan iproute net-snmp-utils avahi-tools curl
                 else
                     # RHEL/CentOS may need EPEL repository
                     if ! rpm -q epel-release > /dev/null 2>&1; then
+                        echo "Installing EPEL repository..." >> $LOG_FILE
                         yum install -y epel-release
                     fi
-                    yum install -y python3 python3-pip nmap net-tools arp-scan iproute net-snmp-utils avahi-tools
+                    yum install -y python3 python3-pip nmap net-tools arp-scan iproute net-snmp-utils avahi-tools curl
                 fi
-            } > /dev/null 2>&1 || error "Failed to install dependencies"
+            } >> $LOG_FILE 2>&1 || {
+                echo "Failed to install dependencies. Check $LOG_FILE for details."
+                error "Failed to install dependencies (see $LOG_FILE for details)"
+            }
             ;;
         arch)
             {
-                pacman -Sy --noconfirm python python-pip nmap net-tools arp-scan iproute2 avahi net-snmp
-            } > /dev/null 2>&1 || error "Failed to install dependencies"
+                echo "Installing dependencies for Arch-based system..." >> $LOG_FILE
+                pacman -Sy --noconfirm python python-pip nmap net-tools arp-scan iproute2 avahi net-snmp curl
+            } >> $LOG_FILE 2>&1 || {
+                echo "Failed to install dependencies. Check $LOG_FILE for details."
+                error "Failed to install dependencies (see $LOG_FILE for details)"
+            }
             ;;
         suse)
             {
-                zypper --non-interactive install python3 python3-pip nmap net-tools arp-scan iproute2 avahi net-snmp
-            } > /dev/null 2>&1 || error "Failed to install dependencies"
+                echo "Installing dependencies for SUSE-based system..." >> $LOG_FILE
+                zypper --non-interactive install python3 python3-pip nmap net-tools arp-scan iproute2 avahi net-snmp curl
+            } >> $LOG_FILE 2>&1 || {
+                echo "Failed to install dependencies. Check $LOG_FILE for details."
+                error "Failed to install dependencies (see $LOG_FILE for details)"
+            }
             ;;
         unknown)
             warning "Attempting to install dependencies using available package manager..."
+            echo "Attempting to detect package manager for unknown distribution..." >> $LOG_FILE
             # Try different package managers
             if command -v apt-get > /dev/null; then
+                echo "Using apt-get package manager..." >> $LOG_FILE
                 apt-get update -qq
                 apt-get install -y -qq python3 python3-pip python3-venv nmap net-tools arp-scan iproute2 \
-                                    avahi-utils snmp
+                                  avahi-utils snmp curl
             elif command -v yum > /dev/null; then
-                yum install -y python3 python3-pip nmap net-tools arp-scan iproute avahi-tools net-snmp-utils
+                echo "Using yum package manager..." >> $LOG_FILE
+                yum install -y python3 python3-pip nmap net-tools arp-scan iproute avahi-tools net-snmp-utils curl
             elif command -v dnf > /dev/null; then
-                dnf install -y python3 python3-pip nmap net-tools arp-scan iproute avahi-tools net-snmp-utils
+                echo "Using dnf package manager..." >> $LOG_FILE
+                dnf install -y python3 python3-pip nmap net-tools arp-scan iproute avahi-tools net-snmp-utils curl
             elif command -v pacman > /dev/null; then
-                pacman -Sy --noconfirm python python-pip nmap net-tools arp-scan iproute2 avahi net-snmp
+                echo "Using pacman package manager..." >> $LOG_FILE
+                pacman -Sy --noconfirm python python-pip nmap net-tools arp-scan iproute2 avahi net-snmp curl
             elif command -v zypper > /dev/null; then
-                zypper --non-interactive install python3 python3-pip nmap net-tools arp-scan iproute2 avahi net-snmp
+                echo "Using zypper package manager..." >> $LOG_FILE
+                zypper --non-interactive install python3 python3-pip nmap net-tools arp-scan iproute2 avahi net-snmp curl
             else
                 error "No supported package manager found"
-            fi
+            fi >> $LOG_FILE 2>&1 || {
+                echo "Failed to install dependencies. Check $LOG_FILE for details."
+                error "Failed to install dependencies (see $LOG_FILE for details)"
+            }
             ;;
     esac
     
@@ -205,10 +248,15 @@ install_python_packages() {
     
     # Create and activate Python virtual environment
     {
+        echo "Creating Python virtual environment..." >> $LOG_FILE
         python3 -m venv $INSTALL_DIR/venv
         # Use the full path to pip to ensure we're using the venv
+        echo "Upgrading pip..." >> $LOG_FILE
         $INSTALL_DIR/venv/bin/pip install --upgrade pip
-    } > /dev/null 2>&1 || error "Failed to create virtual environment"
+    } >> $LOG_FILE 2>&1 || {
+        echo "Failed to create virtual environment. Check $LOG_FILE for details."
+        error "Failed to create virtual environment (see $LOG_FILE for details)"
+    }
     
     success "Python virtual environment created"
     
@@ -216,8 +264,18 @@ install_python_packages() {
     
     # Install required Python packages
     {
+        echo "Installing Python packages..." >> $LOG_FILE
         $INSTALL_DIR/venv/bin/pip install flask python-telegram-bot speedtest-cli python-nmap requests
-    } > /dev/null 2>&1 || error "Failed to install Python dependencies"
+        
+        # Check if requirements.txt exists (when we have the repository)
+        if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+            echo "Installing requirements from requirements.txt..." >> $LOG_FILE
+            $INSTALL_DIR/venv/bin/pip install -r $INSTALL_DIR/requirements.txt
+        fi
+    } >> $LOG_FILE 2>&1 || {
+        echo "Failed to install Python dependencies. Check $LOG_FILE for details."
+        error "Failed to install Python dependencies (see $LOG_FILE for details)"
+    }
     
     success "Python dependencies installed"
 }
@@ -228,14 +286,69 @@ copy_application() {
     # Get current directory
     CURRENT_DIR="$(pwd)"
     
-    # Create a copy of the application
-    {
-        cp -r $CURRENT_DIR/cybex_pulse/* $INSTALL_DIR/
-        # Copy pulse executable script to bin
-        mkdir -p /usr/local/bin
-        cp $CURRENT_DIR/pulse /usr/local/bin/cybex-pulse
-        chmod +x /usr/local/bin/cybex-pulse
-    } > /dev/null 2>&1 || error "Failed to copy application files"
+    # Check if we're running from the repository or via curl pipe
+    if [ -d "$CURRENT_DIR/cybex_pulse" ]; then
+        # We have the repository locally
+        {
+            cp -r $CURRENT_DIR/cybex_pulse/* $INSTALL_DIR/
+            # Copy pulse executable script to bin
+            mkdir -p /usr/local/bin
+            cp $CURRENT_DIR/pulse /usr/local/bin/cybex-pulse
+            chmod +x /usr/local/bin/cybex-pulse
+        } 2>&1 || error "Failed to copy application files"
+    else
+        # We need to download the repository
+        progress "Downloading repository from GitHub"
+        TEMP_DIR=$(mktemp -d)
+        {
+            # Install git if not already installed
+            case $DISTRO_FAMILY in
+                debian)
+                    apt-get install -y -qq git > /dev/null 2>&1
+                    ;;
+                redhat)
+                    if [ "$DISTRO" = "fedora" ]; then
+                        dnf install -y git > /dev/null 2>&1
+                    else
+                        yum install -y git > /dev/null 2>&1
+                    fi
+                    ;;
+                arch)
+                    pacman -Sy --noconfirm git > /dev/null 2>&1
+                    ;;
+                suse)
+                    zypper --non-interactive install git > /dev/null 2>&1
+                    ;;
+                unknown)
+                    if command -v apt-get > /dev/null; then
+                        apt-get install -y -qq git > /dev/null 2>&1
+                    elif command -v yum > /dev/null; then
+                        yum install -y git > /dev/null 2>&1
+                    elif command -v dnf > /dev/null; then
+                        dnf install -y git > /dev/null 2>&1
+                    elif command -v pacman > /dev/null; then
+                        pacman -Sy --noconfirm git > /dev/null 2>&1
+                    elif command -v zypper > /dev/null; then
+                        zypper --non-interactive install git > /dev/null 2>&1
+                    fi
+                    ;;
+            esac
+            
+            # Clone repository
+            git clone https://github.com/DigitalPals/pulse.git $TEMP_DIR
+            
+            # Copy files
+            cp -r $TEMP_DIR/cybex_pulse/* $INSTALL_DIR/
+            # Copy pulse executable
+            mkdir -p /usr/local/bin
+            cp $TEMP_DIR/pulse /usr/local/bin/cybex-pulse
+            chmod +x /usr/local/bin/cybex-pulse
+            
+            # Clean up
+            rm -rf $TEMP_DIR
+        } 2>&1 || error "Failed to download and copy application files"
+        success "Repository downloaded and installed"
+    fi
     
     # Create symlink to the venv-python executable
     ln -sf $INSTALL_DIR/venv/bin/python /usr/local/bin/cybex-pulse-python
@@ -373,9 +486,15 @@ print_completion() {
     echo -e "${BOLD}Configuration:${NC}"
     echo -e "  Config file:     ${CYAN}$CONFIG_DIR/config.json${NC}"
     echo -e "  Log directory:   ${CYAN}$LOG_DIR${NC}"
+    echo -e "  Install log:     ${CYAN}$LOG_FILE${NC}"
     echo
     echo -e "${YELLOW}NOTE: If this is your first time running Cybex Pulse,${NC}"
     echo -e "${YELLOW}you'll need to complete the setup wizard in the web interface.${NC}"
+    echo
+    echo -e "${BOLD}If you encounter any issues:${NC}"
+    echo -e "  - Check the installation log: ${CYAN}$LOG_FILE${NC}"
+    echo -e "  - Check the service status: ${CYAN}sudo systemctl status $SERVICE_NAME${NC}"
+    echo -e "  - View service logs: ${CYAN}sudo journalctl -u $SERVICE_NAME${NC}"
     echo
 }
 
