@@ -109,9 +109,7 @@ install_dependencies() {
             log_info "Installing Python, Git, and core dependencies..."
             apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo snmp arp-scan avahi-utils >> $LOG_FILE 2>&1
             
-            # Install Python packages via apt
-            log_info "Installing Python packages via apt..."
-            apt-get install -y python3-flask python3-requests python3-telegram-bot python3-nmap python3-speedtest-cli >> $LOG_FILE 2>&1 || true
+            # Install Python packages via apt - this will be comprehensive in install_system_packages()
             ;;
             
         redhat)
@@ -119,9 +117,7 @@ install_dependencies() {
                 log_info "Installing Python, Git, and core dependencies..."
                 dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 
-                # Install Python packages via dnf when available
-                log_info "Installing Python packages via dnf..."
-                dnf install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+                # Install Python packages via dnf - this will be comprehensive in install_system_packages()
             else
                 # For RHEL/CentOS/Rocky
                 if ! rpm -q epel-release > /dev/null 2>&1; then
@@ -132,9 +128,7 @@ install_dependencies() {
                 log_info "Installing Python, Git, and core dependencies..."
                 yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 
-                # Install Python packages via yum when available
-                log_info "Installing Python packages via yum..."
-                yum install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+                # Install Python packages via yum - this will be comprehensive in install_system_packages()
             fi
             ;;
             
@@ -145,18 +139,14 @@ install_dependencies() {
             log_info "Installing Python, Git, and core dependencies..."
             pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
             
-            # Install Python packages via pacman when available
-            log_info "Installing Python packages via pacman..."
-            pacman -S --noconfirm python-flask python-requests python-telegram-bot python-nmap >> $LOG_FILE 2>&1 || true
+            # Install Python packages via pacman - this will be comprehensive in install_system_packages()
             ;;
             
         suse)
             log_info "Installing Python, Git, and core dependencies..."
             zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
             
-            # Install Python packages via zypper when available
-            log_info "Installing Python packages via zypper..."
-            zypper --non-interactive install python3-Flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+            # Install Python packages via zypper - this will be comprehensive in install_system_packages()
             ;;
             
         unknown)
@@ -165,25 +155,25 @@ install_dependencies() {
                 log_info "Using apt package manager..."
                 apt-get update -qq >> $LOG_FILE 2>&1
                 apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo snmp arp-scan avahi-utils >> $LOG_FILE 2>&1
-                apt-get install -y python3-flask python3-requests python3-telegram-bot python3-nmap python3-speedtest-cli >> $LOG_FILE 2>&1 || true
+                # Python packages will be installed in install_system_packages()
             elif command -v dnf > /dev/null; then
                 log_info "Using dnf package manager..."
                 dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
-                dnf install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+                # Python packages will be installed in install_system_packages()
             elif command -v yum > /dev/null; then
                 log_info "Using yum package manager..."
                 yum install -y epel-release >> $LOG_FILE 2>&1 || true
                 yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
-                yum install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+                # Python packages will be installed in install_system_packages()
             elif command -v pacman > /dev/null; then
                 log_info "Using pacman package manager..."
                 pacman -Sy --noconfirm >> $LOG_FILE 2>&1
                 pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
-                pacman -S --noconfirm python-flask python-requests python-telegram-bot python-nmap >> $LOG_FILE 2>&1 || true
+                # Python packages will be installed in install_system_packages()
             elif command -v zypper > /dev/null; then
                 log_info "Using zypper package manager..."
                 zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
-                zypper --non-interactive install python3-Flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
+                # Python packages will be installed in install_system_packages()
             else
                 log_error "No supported package manager found." "fatal"
             fi
@@ -240,9 +230,9 @@ install_dependencies() {
     fi
 }
 
-# Install local user site packages if needed
-install_local_user_packages() {
-    log_info "Checking for missing Python packages..."
+# Install packages via system package manager only
+install_system_packages() {
+    log_info "Installing all required Python packages via system package manager..."
     
     # Determine Python command
     PYTHON_CMD="python3"
@@ -250,50 +240,73 @@ install_local_user_packages() {
         PYTHON_CMD="python"
     fi
     
-    # Create local user site directory if it doesn't exist
-    USER_SITE=$($PYTHON_CMD -m site --user-site)
-    mkdir -p "$USER_SITE" 2>/dev/null || true
-    
-    # Check if we have a missing package
+    # Check if we have any missing packages
     MISSING_PACKAGES=false
     
-    if ! $PYTHON_CMD -c "import flask" 2>/dev/null; then
+    if ! $PYTHON_CMD -c "import flask" 2>/dev/null || \
+       ! $PYTHON_CMD -c "import telegram" 2>/dev/null || \
+       ! $PYTHON_CMD -c "import nmap" 2>/dev/null || \
+       ! $PYTHON_CMD -c "import speedtest" 2>/dev/null || \
+       ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
         MISSING_PACKAGES=true
     fi
     
-    if ! $PYTHON_CMD -c "import telegram" 2>/dev/null; then
-        MISSING_PACKAGES=true
-    fi
-    
-    if ! $PYTHON_CMD -c "import nmap" 2>/dev/null; then
-        MISSING_PACKAGES=true
-    fi
-    
-    if ! $PYTHON_CMD -c "import speedtest" 2>/dev/null; then
-        MISSING_PACKAGES=true
-    fi
-    
-    if ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
-        MISSING_PACKAGES=true
-    fi
-    
-    # If we have missing packages, install to user directory
+    # If we have missing packages, install via system package manager
     if [ "$MISSING_PACKAGES" = true ]; then
-        log_info "Installing missing Python packages to user directory..."
+        log_info "Installing missing Python packages using system package manager..."
         
-        # Install basic packages to user site
-        $PYTHON_CMD -m pip install --user flask python-telegram-bot python-nmap speedtest-cli requests >> $LOG_FILE 2>&1 || {
-            log_warning "Could not install all packages to user directory. Will try a local directory instead."
-            
-            # If that fails, use a local lib directory
-            mkdir -p "$HOME/.local/lib/cybex-pulse" 2>/dev/null || true
-            $PYTHON_CMD -m pip install --target="$HOME/.local/lib/cybex-pulse" flask python-telegram-bot python-nmap speedtest-cli requests >> $LOG_FILE 2>&1 || {
-                log_error "Failed to install Python packages. Please install them manually." "fatal"
-            }
-            
-            # Add to PYTHONPATH
-            export PYTHONPATH="$HOME/.local/lib/cybex-pulse:$PYTHONPATH"
-        }
+        case $DISTRO_FAMILY in
+            debian)
+                log_info "Installing Python packages via apt..."
+                apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                ;;
+                
+            redhat)
+                if [ "$DISTRO" = "fedora" ]; then
+                    log_info "Installing Python packages via dnf..."
+                    dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                else
+                    log_info "Installing Python packages via yum..."
+                    yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                fi
+                ;;
+                
+            arch)
+                log_info "Installing Python packages via pacman..."
+                pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1
+                ;;
+                
+            suse)
+                log_info "Installing Python packages via zypper..."
+                zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                ;;
+                
+            unknown)
+                log_warning "Unknown distribution family. Attempting to install packages with available package manager..."
+                if command -v apt-get > /dev/null; then
+                    apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                elif command -v dnf > /dev/null; then
+                    dnf install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                elif command -v yum > /dev/null; then
+                    yum install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                elif command -v pacman > /dev/null; then
+                    pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1
+                elif command -v zypper > /dev/null; then
+                    zypper --non-interactive install python3-Flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1
+                else
+                    log_error "No supported package manager found. Cannot install Python packages." "fatal"
+                fi
+                ;;
+        esac
+        
+        # Verify installation
+        if ! $PYTHON_CMD -c "import flask" 2>/dev/null || \
+           ! $PYTHON_CMD -c "import telegram" 2>/dev/null || \
+           ! $PYTHON_CMD -c "import nmap" 2>/dev/null || \
+           ! $PYTHON_CMD -c "import speedtest" 2>/dev/null || \
+           ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
+            log_error "Failed to install all required Python packages. Please install them manually." "fatal"
+        fi
     else
         log_success "All required Python packages are already installed"
     fi
@@ -335,10 +348,7 @@ create_wrapper_script() {
 #!/bin/bash
 # Wrapper script for Cybex Pulse
 
-# Add local package path if needed
-if [ -d "\$HOME/.local/lib/cybex-pulse" ]; then
-    export PYTHONPATH="\$HOME/.local/lib/cybex-pulse:\$PYTHONPATH"
-fi
+# No local package paths needed - using system packages only
 
 # Add the current directory to the Python path
 export PYTHONPATH="$(pwd):\$PYTHONPATH"
@@ -370,7 +380,7 @@ After=network.target
 Type=simple
 ExecStart=${INSTALL_DIR}/pulse
 WorkingDirectory=${INSTALL_DIR}
-Environment="PYTHONPATH=${INSTALL_DIR}:$HOME/.local/lib/cybex-pulse"
+Environment="PYTHONPATH=${INSTALL_DIR}"
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -433,8 +443,8 @@ main() {
     # Step 2: Install system dependencies
     install_dependencies
     
-    # Step 3: Install local packages if needed
-    install_local_user_packages
+    # Step 3: Install packages via system package manager
+    install_system_packages
     
     # Step 4: Clone repository
     clone_repository
