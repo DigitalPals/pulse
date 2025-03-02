@@ -62,37 +62,36 @@ SERVICE_NAME="cybex-pulse"
 # Functions
 print_cybex_logo() {
     echo -e "${RED}"
-    echo -e "   ▄████▄  ▓██   ██▓ ▄▄▄▄   ▓█████ ▒██   ██▒    ${WHITE} ██▓███   █    ██  ██▓      ██████ ▓█████ ${NC}"
-    echo -e "  ▒██▀ ▀█   ▒██  ██▒▓█████▄ ▓█   ▀ ▒▒ █ █ ▒░    ${WHITE}▓██░  ██▒ ██  ▓██▒▓██▒    ▒██    ▒ ▓█   ▀ ${NC}"
-    echo -e "  ▒▓█    ▄   ▒██ ██░▒██▒ ▄██▒███   ░░  █   ░    ${WHITE}▓██░ ██▓▒▓██  ▒██░▒██░    ░ ▓██▄   ▒███   ${NC}"
-    echo -e "  ▒▓▓▄ ▄██▒  ░ ▐██▓░▒██░█▀  ▒▓█  ▄  ░ █ █ ▒     ${WHITE}▒██▄█▓▒ ▒▓▓█  ░██░▒██░      ▒   ██▒▒▓█  ▄ ${NC}"
-    echo -e "  ▒ ▓███▀ ░  ░ ██▒▓░░▓█  ▀█▓░▒████▒▒██▒ ▒██▒    ${WHITE}▒██▒ ░  ░▒▒█████▓ ░██████▒▒██████▒▒░▒████▒${NC}"
-    echo -e "  ░ ░▒ ▒  ░   ██▒▒▒ ░▒▓███▀▒░░ ▒░ ░▒▒ ░ ░▓ ░    ${WHITE}▒▓▒░ ░  ░░▒▓▒ ▒ ▒ ░ ▒░▓  ░▒ ▒▓▒ ▒ ░░░ ▒░ ░${NC}"
-    echo -e "    ░  ▒    ▓██ ░▒░ ▒░▒   ░  ░ ░  ░░░   ░▒ ░    ${WHITE}░▒ ░     ░░▒░ ░ ░ ░ ░ ▒  ░░ ░▒  ░ ░ ░ ░  ░${NC}"
-    echo -e "  ░         ▒ ▒ ░░   ░    ░    ░    ░    ░      ${WHITE}░░        ░░░ ░ ░   ░ ░   ░  ░  ░     ░   ${NC}"
-    echo -e "  ░ ░       ░ ░      ░         ░  ░ ░    ░      ${WHITE}            ░         ░  ░      ░     ░  ░${NC}"
-    echo -e "  ░         ░ ░           ░                      ${WHITE}                                          ${NC}"
-    echo
+    echo -e "   ______      __                 ____        __         "
+    echo -e "  / ____/_  __/ /_  ___  _  __   / __ \\__  __/ /___ ___  "
+    echo -e " / /   / / / / __ \\/ _ \\| |/_/  / /_/ / / / / / __ \`/ _ \\ "
+    echo -e "/ /___/ /_/ / /_/ /  __/>  <   / ____/ /_/ / / /_/ /  __/ "
+    echo -e "\\____/\\__, /_.___/\\___/_/|_|  /_/    \\__,_/_/\\__,_/\\___/  "
+    echo -e "     /____/                                               "
+    echo -e "${NC}"
 }
 
 print_header() {
     clear
     print_cybex_logo
     
-    echo -e "${DARK_BG}${RED}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${DARK_BG}${RED}║                                                                                ║${NC}"
-    echo -e "${DARK_BG}${RED}║  ${BOLD}${WHITE}Network Monitoring Installation                                            ${RED}║${NC}"
-    echo -e "${DARK_BG}${RED}║  ${GRAY}Version 1.0.0                                                              ${RED}║${NC}"
-    echo -e "${DARK_BG}${RED}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${DARK_BG}${RED}┌────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${DARK_BG}${RED}│  ${BOLD}${WHITE}Network Monitoring Installation                          ${RED}│${NC}"
+    echo -e "${DARK_BG}${RED}│  ${GRAY}Version 1.0.0                                            ${RED}│${NC}"
+    echo -e "${DARK_BG}${RED}└────────────────────────────────────────────────────────────┘${NC}"
     echo
 
-    # Animation
-    echo -ne "${GRAY}Initializing installation"
+    # Simple animation without text overlap issues
+    echo -e "${GRAY}Initializing installation${NC}"
+    printf "  "
     for i in {1..5}; do
-        echo -ne "${PULSE_SYMBOL}"
+        printf "${BLUE}▮${NC}"
         sleep 0.1
+        printf "\b${BLUE}▯${NC}"
+        sleep 0.1
+        printf "\b"
     done
-    echo -e "${NC}\n"
+    echo -e "\n"
 }
 
 show_spinner() {
@@ -133,15 +132,16 @@ animate_progress() {
 
 progress() {
     local text=$1
-    echo -ne "${BOLD}${BLUE}${ARROW} ${text}...${NC} "
+    printf "${BOLD}${BLUE}→ %-50s${NC}" "${text}..."
 }
 
 success() {
-    echo -e "\r${BOLD}${BLUE}${ARROW} ${1}...${NC} ${GREEN}${CHECK_MARK}${NC}"
+    printf "${GREEN}${CHECK_MARK} Success${NC}\n"
+    echo "SUCCESS: $1" >> $LOG_FILE
 }
 
 error() {
-    echo -e "\r${BOLD}${BLUE}${ARROW} ${1}...${NC} ${RED}${X_MARK}${NC}"
+    printf "${RED}${X_MARK} Failed${NC}\n"
     echo "ERROR: $1" >> $LOG_FILE
     echo
     if [ "$2" = "fatal" ]; then
@@ -171,23 +171,8 @@ install_package() {
     local package=$1
     local package_manager=$2
     
-    echo -ne "  ${WHITE}Installing ${BOLD}${package}${NC}${WHITE}...${NC} "
+    printf "  %-25s" "Installing ${package}..."
     echo "Trying to install: $package with $package_manager" >> $LOG_FILE
-    
-    # Start a background spinner animation
-    (
-        i=1
-        sp='⣾⣽⣻⢿⡿⣟⣯⣷'
-        while true; do
-            echo -ne "\b${BLUE}${sp:i++%8:1}${NC}"
-            sleep 0.1
-        done
-    ) &
-    
-    SPINNER_PID=$!
-    
-    # Make sure the spinner dies if the script exits
-    trap "kill $SPINNER_PID 2>/dev/null" EXIT
     
     case $package_manager in
         apt)
@@ -209,17 +194,12 @@ install_package() {
     
     local result=$?
     
-    # Kill the spinner
-    kill $SPINNER_PID 2>/dev/null
-    wait $SPINNER_PID 2>/dev/null
-    trap - EXIT
-    
     if [ $result -eq 0 ]; then
-        echo -e "\b${GREEN}${CHECK_MARK}${NC}"
+        echo -e "${GREEN}${CHECK_MARK} Success${NC}"
         echo "SUCCESS: Installed $package" >> $LOG_FILE
         return 0
     else
-        echo -e "\b${RED}${X_MARK}${NC}"
+        echo -e "${RED}${X_MARK} Failed${NC}"
         echo "FAILED: Could not install $package" >> $LOG_FILE
         return 1
     fi
@@ -229,7 +209,7 @@ step() {
     local step_num=$1
     local description=$2
     local step_percentage=$((step_num * 100 / TOTAL_STEPS))
-    local progress_bar_width=50
+    local progress_bar_width=40
     
     # Calculate how many filled blocks
     local filled_width=$((progress_bar_width * step_num / TOTAL_STEPS))
@@ -238,27 +218,19 @@ step() {
     # Create the progress bar
     local progress_bar=""
     for ((i=0; i<filled_width; i++)); do
-        progress_bar="${progress_bar}█"
+        progress_bar="${progress_bar}▓"
     done
     
     for ((i=0; i<empty_width; i++)); do
         progress_bar="${progress_bar}░"
     done
     
-    # Display header with animation
-    echo -ne "\n${RED}${GEAR} "
-    for (( i=0; i<${#description}; i++ )); do
-        echo -ne "${RED}${BOLD}${description:$i:1}${NC}"
-        sleep 0.01
-    done
-    echo
+    # Just display header without animation to prevent overrun
+    echo -e "\n${RED}${BOLD}⚙ ${description}${NC}"
     
     # Display progress bar
-    echo -e "${DARK_BG}  ${WHITE}[${RED}${progress_bar}${WHITE}] ${step_percentage}%${NC}"
+    echo -e "${DARK_BG}  [${RED}${progress_bar}${WHITE}] ${step_percentage}%${NC}"
     echo -e "${GRAY}  Step ${step_num} of ${TOTAL_STEPS}${NC}\n"
-    
-    # Short pause for effect
-    sleep 0.3
 }
 
 check_distribution() {
@@ -909,14 +881,12 @@ print_completion() {
     done
     echo -e "${NC}\n"
     
-    # ASCII success animation
+    # Success message
     echo -e "${GREEN}"
-    echo "  ██████╗ ██╗   ██╗ ██████╗ ██████╗███████╗███████╗███████╗██╗"
-    echo "  ██╔══██╗██║   ██║██╔════╝██╔════╝██╔════╝██╔════╝██╔════╝██║"
-    echo "  ██████╔╝██║   ██║██║     ██║     █████╗  ███████╗███████╗██║"
-    echo "  ██╔═══╝ ██║   ██║██║     ██║     ██╔══╝  ╚════██║╚════██║╚═╝"
-    echo "  ██║     ╚██████╔╝╚██████╗╚██████╗███████╗███████║███████║██╗"
-    echo "  ╚═╝      ╚═════╝  ╚═════╝ ╚═════╝╚══════╝╚══════╝╚══════╝╚═╝"
+    echo -e "  ┌─────────────────────────────────────────┐"
+    echo -e "  │             INSTALLATION                │"
+    echo -e "  │               COMPLETE                  │"
+    echo -e "  └─────────────────────────────────────────┘"
     echo -e "${NC}\n"
     
     # Create fancy box
