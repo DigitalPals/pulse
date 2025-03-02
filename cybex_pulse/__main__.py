@@ -74,22 +74,56 @@ def main():
         logger.info("Application terminated by user (SIGINT/SIGTERM)")
         app.stop_event.set()  # Signal threads to stop
         app.cleanup()
+        
+        # Reset terminal to canonical mode
+        import termios
+        import atexit
+        import os
+        try:
+            # Reset terminal to initial state
+            fd = sys.stdin.fileno()
+            mode = termios.tcgetattr(fd)
+            mode[3] = mode[3] | termios.ECHO | termios.ICANON
+            termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
+            os.system('stty sane')  # Additional terminal reset
+        except Exception as e:
+            logger.debug(f"Error resetting terminal: {e}")
+        
         sys.exit(0)
     
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
+    # Ensure terminal is reset on exit
+    import atexit
+    def reset_terminal():
+        try:
+            import os
+            os.system('stty sane')
+        except Exception:
+            pass
+    atexit.register(reset_terminal)
+    
     try:
         app.start()
     except KeyboardInterrupt:
         # This should not be needed due to the signal handler, but keep it as a fallback
         logger.info("Application terminated by user")
+        # Reset terminal directly here as well
+        import os
+        os.system('stty sane')
     except Exception as e:
         logger.exception("Unhandled exception: %s", str(e))
         return 1
     finally:
         app.cleanup()
+        # One final attempt to reset the terminal
+        try:
+            import os
+            os.system('stty sane')
+        except Exception:
+            pass
     
     return 0
 

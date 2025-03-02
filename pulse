@@ -41,4 +41,5 @@ EOF
 fi
 
 # Change to the Pulse directory, activate the virtual environment, and run the application
-cd $INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && python "$INSTALL_DIR/run_app.py" "$@"
+# Use exec to replace the shell process with Python to properly handle signals
+cd $INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && exec python "$INSTALL_DIR/run_app.py" "$@"
