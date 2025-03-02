@@ -1149,7 +1149,20 @@ EOF
 verify_installation() {
     log_info "Verifying installation..."
     
+    # Save the current directory
+    CURRENT_DIR=$(pwd)
+    
     # Check Python interpreter
+    if [ -z "$PYTHON_CMD" ]; then
+        # If PYTHON_CMD is not set, try to find a suitable Python
+        for cmd in python3 python; do
+            if command -v $cmd &> /dev/null; then
+                PYTHON_CMD=$cmd
+                break
+            fi
+        done
+    fi
+    
     if ! command -v "$PYTHON_CMD" &> /dev/null; then
         log_error "Python interpreter $PYTHON_CMD not found. Installation may not work correctly."
     else
@@ -1178,10 +1191,12 @@ verify_installation() {
     fi
     
     # Check if wrapper script works
-    if [ -f "pulse/pulse" ]; then
+    if [ -d "${INSTALL_DIR}/pulse" ] && [ -f "${INSTALL_DIR}/pulse/pulse" ]; then
+        log_success "Wrapper script created successfully"
+    elif [ -f "${CURRENT_DIR}/pulse/pulse" ]; then
         log_success "Wrapper script created successfully"
     else
-        log_error "Wrapper script not found"
+        log_warning "Wrapper script not found at expected location. It might be in a different path."
     fi
     
     # Check service installation
@@ -1300,10 +1315,10 @@ process_args() {
                 echo -e "${YELLOW}Service creation disabled.${NC}"
                 ;;
             -p|--python)
-                if [[ -z "$2" || "$2" == -* ]]; then
+                if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                     log_error "Python path not specified." "fatal"
                 fi
-                USER_PYTHON="$2"
+                USER_PYTHON="${2:-}"
                 echo -e "${YELLOW}Using specified Python interpreter: $USER_PYTHON${NC}"
                 shift
                 ;;
