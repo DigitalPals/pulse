@@ -17,6 +17,12 @@ def register_event_routes(app, server):
         limit = int(server.request.args.get('limit', 100))
         event_type = server.request.args.get('type')
         severity = server.request.args.get('severity')
+        show_alerts = server.request.args.get('show_alerts', 'false').lower() == 'true'
         
-        events = server.db_manager.get_recent_events(limit, event_type, severity)
+        events = server.db_manager.get_recent_events(
+            limit,
+            event_type,
+            severity,
+            show_alerts=show_alerts
+        )
         return server.jsonify(events)

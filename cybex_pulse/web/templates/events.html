@@ -7,70 +7,81 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <h3>Event Filters</h3>
-    </div>
-    <div class="card-body">
-        <form id="filter-form" method="get" action="{{ url_for('events') }}">
-            <div class="filter-row">
-                <div class="form-group">
-                    <label for="event-type">Event Type</label>
-                    <select id="event-type" name="type" class="form-control">
-                        <option value="">All Types</option>
-                        <option value="device_detected" {% if request.args.get('type') == 'device_detected' %}selected{% endif %}>Device Detected</option>
-                        <option value="device_offline" {% if request.args.get('type') == 'device_offline' %}selected{% endif %}>Device Offline</option>
-                        <option value="device_fingerprinted" {% if request.args.get('type') == 'device_fingerprinted' %}selected{% endif %}>Device Fingerprinted</option>
-                        <option value="alert" {% if request.args.get('type') == 'alert' %}selected{% endif %}>Alert</option>
-                        <option value="speed_test" {% if request.args.get('type') == 'speed_test' %}selected{% endif %}>Speed Test</option>
-                        <option value="website_check" {% if request.args.get('type') == 'website_check' %}selected{% endif %}>Website Check</option>
-                        <option value="security_scan" {% if request.args.get('type') == 'security_scan' %}selected{% endif %}>Security Scan</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="severity">Severity</label>
-                    <select id="severity" name="severity" class="form-control">
-                        <option value="">All Severities</option>
-                        <option value="info" {% if request.args.get('severity') == 'info' %}selected{% endif %}>Info</option>
-                        <option value="warning" {% if request.args.get('severity') == 'warning' %}selected{% endif %}>Warning</option>
-                        <option value="error" {% if request.args.get('severity') == 'error' %}selected{% endif %}>Error</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="limit">Limit</label>
-                    <select id="limit" name="limit" class="form-control">
-                        <option value="100" {% if request.args.get('limit') == '100' or not request.args.get('limit') %}selected{% endif %}>100</option>
-                        <option value="250" {% if request.args.get('limit') == '250' %}selected{% endif %}>250</option>
-                        <option value="500" {% if request.args.get('limit') == '500' %}selected{% endif %}>500</option>
-                        <option value="1000" {% if request.args.get('limit') == '1000' %}selected{% endif %}>1000</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>&nbsp;</label>
-                    <button type="submit" class="btn btn-primary">Apply Filters</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
         <h3>Events</h3>
         <span id="last-updated">Last updated: <span id="update-time">{{ now }}</span></span>
     </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Type</th>
-                <th>Severity</th>
-                <th>Message</th>
-                <th>Details</th>
-            </tr>
-        </thead>
-        <tbody id="events-table">
+    <div class="card-body">
+        <div class="filters-container">
+            <div class="card filter-card">
+                <div class="card-header">
+                    <h4>Event Filters</h4>
+                </div>
+                <div class="card-body">
+                    <form id="filter-form" method="get" action="{{ url_for('events') }}">
+                        <div class="filter-row">
+                            <div class="form-group">
+                                <label for="event-type">Event Type</label>
+                                <select id="event-type" name="type" class="form-control">
+                                    <option value="">All Types</option>
+                                    <option value="device_detected" {% if request.args.get('type') == 'device_detected' %}selected{% endif %}>Device Detected</option>
+                                    <option value="device_offline" {% if request.args.get('type') == 'device_offline' %}selected{% endif %}>Device Offline</option>
+                                    <option value="device_fingerprinted" {% if request.args.get('type') == 'device_fingerprinted' %}selected{% endif %}>Device Fingerprinted</option>
+                                    <option value="alert" {% if request.args.get('type') == 'alert' %}selected{% endif %}>Alert</option>
+                                    <option value="speed_test" {% if request.args.get('type') == 'speed_test' %}selected{% endif %}>Speed Test</option>
+                                    <option value="website_check" {% if request.args.get('type') == 'website_check' %}selected{% endif %}>Website Check</option>
+                                    <option value="security_scan" {% if request.args.get('type') == 'security_scan' %}selected{% endif %}>Security Scan</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="severity">Severity</label>
+                                <select id="severity" name="severity" class="form-control">
+                                    <option value="">All Severities</option>
+                                    <option value="info" {% if request.args.get('severity') == 'info' %}selected{% endif %}>Info</option>
+                                    <option value="warning" {% if request.args.get('severity') == 'warning' %}selected{% endif %}>Warning</option>
+                                    <option value="error" {% if request.args.get('severity') == 'error' %}selected{% endif %}>Error</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="limit">Limit</label>
+                                <select id="limit" name="limit" class="form-control">
+                                    <option value="100" {% if request.args.get('limit') == '100' or not request.args.get('limit') %}selected{% endif %}>100</option>
+                                    <option value="250" {% if request.args.get('limit') == '250' %}selected{% endif %}>250</option>
+                                    <option value="500" {% if request.args.get('limit') == '500' %}selected{% endif %}>500</option>
+                                    <option value="1000" {% if request.args.get('limit') == '1000' %}selected{% endif %}>1000</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="show-alerts">Alert Messages</label>
+                                <select id="show-alerts" name="show_alerts" class="form-control">
+                                    <option value="false" {% if request.args.get('show_alerts') != 'true' %}selected{% endif %}>Hide alert messages</option>
+                                    <option value="true" {% if request.args.get('show_alerts') == 'true' %}selected{% endif %}>Show alert messages</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="events-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>Message</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="events-table">
             {% for event in events %}
             <tr>
                 <td>{{ event.timestamp|timestamp_to_time }}</td>
@@ -130,7 +141,9 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- Details Modal -->
@@ -205,12 +218,14 @@
         const eventType = document.getElementById('event-type').value;
         const severity = document.getElementById('severity').value;
         const limit = document.getElementById('limit').value;
+        const showAlerts = document.getElementById('show-alerts').value;
         
         // Build query string
         let queryParams = new URLSearchParams();
         if (eventType) queryParams.append('type', eventType);
         if (severity) queryParams.append('severity', severity);
         queryParams.append('limit', limit);
+        queryParams.append('show_alerts', showAlerts);
         
         // Fetch events with filters
         fetch(`{{ url_for('api_events') }}?${queryParams.toString()}`)
@@ -319,6 +334,36 @@
 </script>
 
 <style>
+    .filters-container {
+        margin-bottom: 20px;
+    }
+    
+    .events-table-container {
+        margin-top: 20px;
+    }
+    
+    .events-table-container table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .filter-card {
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .filter-card .card-header {
+        background-color: var(--lighter-bg);
+        padding: 10px 15px;
+    }
+    
+    .filter-card .card-header h4 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
     .filter-row {
         display: flex;
         flex-wrap: wrap;

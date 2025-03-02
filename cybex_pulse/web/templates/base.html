@@ -90,9 +90,9 @@
                     </li>
                 </ul>
                 <div class="sidebar-footer">
-                    <small>© Cybex Pulse v{{ version }}</small>
-                    <div class="update-badge {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}" id="update-badge">
-                        <a href="#" id="update-link">
+                    <div class="copyright">
+                        <span>© Cybex Pulse </span>
+                        <a href="#" id="update-link" class="update-status {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}">
                             {% if update_disabled %}
                                 Updates Disabled
                             {% elif update_available %}
@@ -186,33 +186,32 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const updateLink = document.getElementById('update-link');
-            const updateBadge = document.getElementById('update-badge');
             
             if (updateLink) {
                 updateLink.addEventListener('click', function(e) {
                     e.preventDefault();
                     
                     // Don't do anything if updates are disabled
-                    if (updateBadge.classList.contains('disabled')) {
+                    if (updateLink.classList.contains('disabled')) {
                         alert('Updates are disabled for non-git installations.');
                         return;
                     }
                     
-                    if (updateBadge.classList.contains('up-to-date')) {
+                    if (updateLink.classList.contains('up-to-date')) {
                         // If up to date, just check for updates
                         fetch('/check-update')
                             .then(response => response.json())
                             .then(data => {
                                 if (data.update_available) {
-                                    updateBadge.classList.remove('up-to-date');
-                                    updateLink.innerHTML = 'Update Available';
+                                    updateLink.classList.remove('up-to-date');
+                                    updateLink.innerHTML = '<i class="fas fa-arrow-circle-up"></i> Update Available';
                                     
                                     if (confirm('A new version of Pulse is available. Do you want to update?')) {
                                         performUpdate();
                                     }
                                 } else if (data.error && data.error.includes('not a git repository')) {
-                                    updateBadge.classList.add('disabled');
-                                    updateLink.innerHTML = 'Updates Disabled';
+                                    updateLink.classList.add('disabled');
+                                    updateLink.innerHTML = '<i class="fas fa-ban"></i> Updates Disabled';
                                     alert('Updates are disabled for non-git installations.');
                                 } else {
                                     alert('Your system is up to date.');
@@ -233,7 +232,7 @@
             
             function performUpdate() {
                 // Show loading indicator
-                updateLink.innerHTML = 'Updating...';
+                updateLink.innerHTML = '<i class="fas fa-sync fa-spin"></i> Updating...';
                 
                 // Call update API
                 fetch('/perform-update')
@@ -242,20 +241,20 @@
                         if (data.error) {
                             alert('Update failed: ' + data.error);
                             if (data.error.includes('not a git repository')) {
-                                updateBadge.classList.add('disabled');
-                                updateLink.innerHTML = 'Updates Disabled';
+                                updateLink.classList.add('disabled');
+                                updateLink.innerHTML = '<i class="fas fa-ban"></i> Updates Disabled';
                             } else {
-                                updateLink.innerHTML = 'Update Available';
+                                updateLink.innerHTML = '<i class="fas fa-arrow-circle-up"></i> Update Available';
                             }
                         } else {
                             alert(data.message || 'Update successful. The application will restart shortly.');
-                            updateLink.innerHTML = 'Restarting...';
+                            updateLink.innerHTML = '<i class="fas fa-sync fa-spin"></i> Restarting...';
                         }
                     })
                     .catch(error => {
                         console.error('Error:', error);
                         alert('Update failed: ' + error);
-                        updateLink.innerHTML = 'Update Available';
+                        updateLink.innerHTML = '<i class="fas fa-arrow-circle-up"></i> Update Available';
                     });
             }
         });

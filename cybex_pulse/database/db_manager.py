@@ -1,6 +1,7 @@
 """
 Database management for Cybex Pulse.
 """
+import json
 import logging
 import sqlite3
 import threading
@@ -464,15 +465,17 @@ class DatabaseManager:
             
         return event_id
     
-    def get_recent_events(self, limit: int = 100, 
-                         event_type: str = None, 
-                         severity: str = None) -> List[Dict[str, Any]]:
+    def get_recent_events(self, limit: int = 100,
+                          event_type: str = None,
+                          severity: str = None,
+                          show_alerts: bool = False) -> List[Dict[str, Any]]:
         """Get recent events from the database.
         
         Args:
             limit: Maximum number of events to return
             event_type: Filter by event type (optional)
             severity: Filter by severity level (optional)
+            show_alerts: If True, include ALERT events, otherwise filter them out (default: False)
             
         Returns:
             List of dictionaries containing event information
@@ -487,6 +490,10 @@ class DatabaseManager:
         if event_type:
             where_clauses.append('event_type = ?')
             params.append(event_type)
+        elif not show_alerts:
+            # If not specifically requesting alerts and show_alerts is False, exclude alert events
+            where_clauses.append('event_type != ?')
+            params.append(self.EVENT_ALERT)
         
         if severity:
             where_clauses.append('severity = ?')
