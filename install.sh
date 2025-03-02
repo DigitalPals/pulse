@@ -521,8 +521,8 @@ install_python_packages() {
     # Check system Python is available
     setup_python_environment
     
-    # Install Python packages
-    install_python_dependencies
+    # Create virtual environment and install dependencies
+    create_venv_and_install_deps
 }
 
 # Setup Python environment
@@ -551,25 +551,70 @@ setup_python_environment() {
         return 1
     fi
     
-    # Check if pip is available
-    echo -ne "${ARROW} ${CYAN}Checking pip installation...${NC} "
-    echo "Checking pip installation..." >> $LOG_FILE
+    # Check if python3-venv is installed (handle Debian/Ubuntu externally managed environments)
+    echo -ne "${ARROW} ${CYAN}Checking for python3-venv...${NC} "
+    echo "Checking for python3-venv..." >> $LOG_FILE
     
-    if command -v pip3 > /dev/null 2>&1; then
-        PIP_VERSION=$(pip3 --version 2>&1)
-        echo -e "${CHECK_MARK} ${GREEN}Success${NC} ($(echo $PIP_VERSION | cut -d' ' -f1,2))"
-        echo "SUCCESS: Found pip: $PIP_VERSION" >> $LOG_FILE
-    else
+    if ! python3 -m venv --help > /dev/null 2>&1; then
         echo -e "${CROSS_MARK} ${RED}Not found${NC}"
-        echo "ERROR: pip3 not found" >> $LOG_FILE
-        error "pip3 not found. Please install pip for Python 3."
-        return 1
+        echo "python3-venv not installed. Attempting to install..." >> $LOG_FILE
+        
+        case $DISTRO_FAMILY in
+            debian)
+                apt-get install -y python3-venv >> $LOG_FILE 2>&1
+                ;;
+            redhat)
+                if [ "$DISTRO" = "fedora" ]; then
+                    dnf install -y python3-venv >> $LOG_FILE 2>&1
+                else
+                    yum install -y python3-venv >> $LOG_FILE 2>&1
+                fi
+                ;;
+            arch)
+                # No need to install venv separately on Arch
+                ;;
+            suse)
+                zypper --non-interactive install python3-venv >> $LOG_FILE 2>&1
+                ;;
+        esac
+        
+        if python3 -m venv --help > /dev/null 2>&1; then
+            echo -e "${CHECK_MARK} ${GREEN}Installed${NC}"
+            echo "SUCCESS: Installed python3-venv" >> $LOG_FILE
+        else
+            echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+            echo "ERROR: Failed to install python3-venv" >> $LOG_FILE
+            error "Failed to install python3-venv. Please install it manually."
+            return 1
+        fi
+    else
+        echo -e "${CHECK_MARK} ${GREEN}Found${NC}"
+        echo "SUCCESS: python3-venv is installed" >> $LOG_FILE
     fi
     
     # Create necessary directories
     mkdir -p $INSTALL_DIR/bin $INSTALL_DIR/log
     
-    # Create Python launcher script
+    success "Python environment setup completed"
+}
+
+# Create virtual environment and install dependencies
+create_venv_and_install_deps() {
+    # Create a proper virtual environment
+    echo -ne "${ARROW} ${CYAN}Creating virtual environment...${NC} "
+    echo "Creating virtual environment..." >> $LOG_FILE
+    
+    if python3 -m venv $INSTALL_DIR/venv >> $LOG_FILE 2>&1; then
+        echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+        echo "SUCCESS: Created virtual environment" >> $LOG_FILE
+    else
+        echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+        echo "FAILED: Could not create virtual environment" >> $LOG_FILE
+        error "Failed to create virtual environment. Please check the logs."
+        return 1
+    fi
+    
+    # Create Python launcher script to use our venv
     echo -ne "${ARROW} ${CYAN}Creating Python launcher...${NC} "
     echo "Creating Python launcher..." >> $LOG_FILE
     
@@ -577,7 +622,7 @@ setup_python_environment() {
 #!/bin/bash
 # Python launcher script for Cybex Pulse
 export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH
-python3 "\$@"
+$INSTALL_DIR/venv/bin/python "\$@"
 EOF
     chmod +x $INSTALL_DIR/bin/cybex-python
     
@@ -590,25 +635,21 @@ EOF
         warning "Failed to create Python launcher, but continuing with installation"
     fi
     
-    # Create symlink to system Python
-    ln -sf $(which python3) /usr/local/bin/cybex-python
+    # Create symlink to our venv python
+    ln -sf $INSTALL_DIR/venv/bin/python /usr/local/bin/cybex-python
     
-    success "Python environment setup completed"
-}
-
-# Install Python dependencies
-install_python_dependencies() {
     # Define core Python packages
     python_core_pkgs=("flask" "requests" "python-nmap")
     python_optional_pkgs=("speedtest-cli" "python-telegram-bot" "pyyaml" "click")
     
-    # Determine which pip to use (system pip)
-    PIP_CMD="pip3"
+    # Determine which pip to use
+    PIP_CMD="$INSTALL_DIR/venv/bin/pip"
     
-    # Make sure pip is up-to-date
-    echo -ne "${ARROW} ${CYAN}Upgrading pip...${NC} "
+    # Make sure pip is up-to-date in our venv
+    echo -ne "${ARROW} ${CYAN}Upgrading pip in virtual environment...${NC} "
     if $PIP_CMD install --upgrade pip >> $LOG_FILE 2>&1; then
         echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+        echo "SUCCESS: Upgraded pip in virtual environment" >> $LOG_FILE
     else
         echo -e "${CROSS_MARK} ${RED}Failed${NC}"
         warning "Failed to upgrade pip, but continuing with installation"
@@ -668,23 +709,33 @@ install_python_dependencies() {
         fi
     fi
     
-    # Install the package directly to the system Python
+    # Install the package to our venv
     if [ -d "$INSTALL_DIR" ]; then
-        echo -ne "${ARROW} ${CYAN}Installing cybex-pulse package to system Python...${NC} "
+        echo -ne "${ARROW} ${CYAN}Installing cybex-pulse package...${NC} "
         echo "Installing cybex-pulse package..." >> $LOG_FILE
         cd $INSTALL_DIR
         
         # Ensure all directories have __init__.py files
-        find . -type d -not -path "*/\.*" -exec touch {}/__init__.py \; >> $LOG_FILE 2>&1
+        find . -type d -not -path "*/\.*" -not -path "*/venv*" -exec touch {}/__init__.py \; >> $LOG_FILE 2>&1
         
-        # Install the package to the system Python
+        # Install the package in development mode
         if $PIP_CMD install -e . >> $LOG_FILE 2>&1; then
             echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
-            echo "SUCCESS: Installed cybex-pulse package to system Python" >> $LOG_FILE
+            echo "SUCCESS: Installed cybex-pulse package to virtual environment" >> $LOG_FILE
         else
             echo -e "${CROSS_MARK} ${RED}Failed${NC}"
-            echo "FAILED: Could not install cybex-pulse package to system Python" >> $LOG_FILE
-            warning "Failed to install cybex-pulse package, but installation will continue"
+            echo "FAILED: Could not install cybex-pulse package to virtual environment" >> $LOG_FILE
+            
+            # Try alternate installation method
+            echo -ne "${ARROW} ${CYAN}Trying alternate installation method...${NC} "
+            if $PIP_CMD install . >> $LOG_FILE 2>&1; then
+                echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+                echo "SUCCESS: Installed cybex-pulse package using alternate method" >> $LOG_FILE
+            else
+                echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+                echo "FAILED: All installation methods failed" >> $LOG_FILE
+                warning "Failed to install cybex-pulse package, but installation will continue"
+            fi
         fi
     fi
 }
@@ -1109,10 +1160,11 @@ WRAPPER
 
 chmod +x "\$INSTALL_DIR/run_app.py"
 
-# Run directly using the wrapper
+# Run using the virtual environment
 cd \$INSTALL_DIR
+source \$INSTALL_DIR/venv/bin/activate
 export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH
-python3 "\$INSTALL_DIR/run_app.py" "\$@"
+\$INSTALL_DIR/venv/bin/python "\$INSTALL_DIR/run_app.py" "\$@"
 EOF
     chmod +x /usr/local/bin/cybex-pulse
     

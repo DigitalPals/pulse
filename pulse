@@ -40,5 +40,5 @@ EOF
     chmod +x "$INSTALL_DIR/run_app.py"
 fi
 
-# Change to the Pulse directory and run the application directly
-cd $INSTALL_DIR && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && python3 "$INSTALL_DIR/run_app.py" "$@"
+# Change to the Pulse directory, activate the virtual environment, and run the application
+cd $INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && python "$INSTALL_DIR/run_app.py" "$@"
