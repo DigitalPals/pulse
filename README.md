@@ -30,7 +30,10 @@ One-line installation (Debian/Ubuntu):
 curl -sSL https://raw.githubusercontent.com/DigitalPals/pulse/main/install.sh | sudo bash
 ```
 
-After installation, access the web interface at http://YOUR_IP_ADDRESS:8000
+After installation, access the web interface at http://YOUR_IP_ADDRESS:8080
+
+> ⚠️ **IMPORTANT NOTE FOR PROXMOX USERS**
+> When installing in a Proxmox LXC, you **MUST** deselect the "Unprivileged container" option during container creation.
 
 ---
 
@@ -166,27 +169,6 @@ sudo systemctl start cybex-pulse
 ```
 </details>
 
-<details>
-<summary><strong>Docker Installation</strong></summary>
-
-For those who prefer containerized deployments, we provide a Docker image:
-
-```bash
-# Pull the image
-docker pull cybex/pulse:latest
-
-# Run with necessary network access
-docker run -d \
-  --name cybex-pulse \
-  --network host \
-  --cap-add NET_ADMIN \
-  --cap-add NET_RAW \
-  -v pulse-data:/opt/cybex-pulse/data \
-  cybex/pulse:latest
-```
-
-**Note:** The container requires host networking and specific capabilities to perform network scanning.
-</details>
 
 ## ⚙️ Configuration
 
@@ -252,7 +234,7 @@ The configuration file supports the following advanced options:
   <table>
     <tr>
       <td><strong>Default URL</strong></td>
-      <td>http://YOUR_IP_ADDRESS:8000</td>
+      <td>http://YOUR_IP_ADDRESS:8080</td>
     </tr>
   </table>
 </div>
@@ -274,7 +256,7 @@ Cybex Pulse requires root privileges for several reasons:
 We've designed the software to operate with the minimum necessary privileges while still providing powerful network monitoring capabilities.
 </details>
 
-<details>
+<details open>
 <summary><strong>Data Privacy</strong></summary>
 
 Cybex Pulse respects your privacy:
@@ -287,29 +269,6 @@ Cybex Pulse respects your privacy:
 The software only monitors devices on your local network and does not perform any external scanning or data collection beyond what you explicitly configure (like website monitoring).
 </details>
 
-## 🐳 Advanced Deployment Options
-
-<details>
-<summary><strong>Running on Proxmox Containers</strong></summary>
-
-When running Cybex Pulse in a Proxmox container, you need to ensure the container has:
-
-1. **Unprivileged Mode Access**:
-   - Set the container as unprivileged in Proxmox
-   - Add the following features to the container:
-     ```
-     features: keyctl=1,nesting=1
-     ```
-
-2. **Required Capabilities**:
-   ```
-   lxc.cap.drop: 
-   lxc.cap.keep: sys_admin sys_nice sys_resource sys_time setgid setuid net_bind_service net_admin net_raw
-   ```
-
-3. **Additional Network Configuration**:
-   - Ensure the container has its own network interface in bridge mode
-</details>
 
 ## 📊 Screenshots
 
