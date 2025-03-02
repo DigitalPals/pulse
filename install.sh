@@ -107,7 +107,7 @@ install_dependencies() {
             apt-get update -qq >> $LOG_FILE 2>&1
             
             log_info "Installing Python, Git, and core dependencies..."
-            apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+            apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo snmp arp-scan avahi-utils >> $LOG_FILE 2>&1
             
             # Install Python packages via apt
             log_info "Installing Python packages via apt..."
@@ -117,7 +117,7 @@ install_dependencies() {
         redhat)
             if [ "$DISTRO" = "fedora" ]; then
                 log_info "Installing Python, Git, and core dependencies..."
-                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
+                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 
                 # Install Python packages via dnf when available
                 log_info "Installing Python packages via dnf..."
@@ -130,7 +130,7 @@ install_dependencies() {
                 fi
                 
                 log_info "Installing Python, Git, and core dependencies..."
-                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
+                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 
                 # Install Python packages via yum when available
                 log_info "Installing Python packages via yum..."
@@ -143,7 +143,7 @@ install_dependencies() {
             pacman -Sy --noconfirm >> $LOG_FILE 2>&1
             
             log_info "Installing Python, Git, and core dependencies..."
-            pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+            pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
             
             # Install Python packages via pacman when available
             log_info "Installing Python packages via pacman..."
@@ -152,7 +152,7 @@ install_dependencies() {
             
         suse)
             log_info "Installing Python, Git, and core dependencies..."
-            zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+            zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
             
             # Install Python packages via zypper when available
             log_info "Installing Python packages via zypper..."
@@ -164,25 +164,25 @@ install_dependencies() {
             if command -v apt-get > /dev/null; then
                 log_info "Using apt package manager..."
                 apt-get update -qq >> $LOG_FILE 2>&1
-                apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+                apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo snmp arp-scan avahi-utils >> $LOG_FILE 2>&1
                 apt-get install -y python3-flask python3-requests python3-telegram-bot python3-nmap python3-speedtest-cli >> $LOG_FILE 2>&1 || true
             elif command -v dnf > /dev/null; then
                 log_info "Using dnf package manager..."
-                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
+                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 dnf install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             elif command -v yum > /dev/null; then
                 log_info "Using yum package manager..."
                 yum install -y epel-release >> $LOG_FILE 2>&1 || true
-                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
+                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo net-snmp-utils arp-scan avahi >> $LOG_FILE 2>&1
                 yum install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             elif command -v pacman > /dev/null; then
                 log_info "Using pacman package manager..."
                 pacman -Sy --noconfirm >> $LOG_FILE 2>&1
-                pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+                pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
                 pacman -S --noconfirm python-flask python-requests python-telegram-bot python-nmap >> $LOG_FILE 2>&1 || true
             elif command -v zypper > /dev/null; then
                 log_info "Using zypper package manager..."
-                zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+                zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo net-snmp arp-scan avahi >> $LOG_FILE 2>&1
                 zypper --non-interactive install python3-Flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             else
                 log_error "No supported package manager found." "fatal"
@@ -204,6 +204,40 @@ install_dependencies() {
     fi
 
     log_success "Dependencies installed successfully"
+    
+    # Try to fix avahi if missing components
+    if ! command -v avahi-browse &> /dev/null || ! command -v avahi-resolve &> /dev/null; then
+        log_info "Installing additional Avahi components..."
+        
+        case $DISTRO_FAMILY in
+            debian)
+                apt-get install -y avahi-daemon avahi-discover avahi-utils libnss-mdns >> $LOG_FILE 2>&1 || true
+                systemctl enable avahi-daemon >> $LOG_FILE 2>&1 || true
+                systemctl start avahi-daemon >> $LOG_FILE 2>&1 || true
+                ;;
+            redhat)
+                if [ "$DISTRO" = "fedora" ]; then
+                    dnf install -y avahi avahi-tools nss-mdns >> $LOG_FILE 2>&1 || true
+                else
+                    yum install -y avahi avahi-tools nss-mdns >> $LOG_FILE 2>&1 || true
+                fi
+                systemctl enable avahi-daemon >> $LOG_FILE 2>&1 || true
+                systemctl start avahi-daemon >> $LOG_FILE 2>&1 || true
+                ;;
+            arch)
+                pacman -S --noconfirm avahi nss-mdns >> $LOG_FILE 2>&1 || true
+                systemctl enable avahi-daemon >> $LOG_FILE 2>&1 || true
+                systemctl start avahi-daemon >> $LOG_FILE 2>&1 || true
+                ;;
+            suse)
+                zypper --non-interactive install avahi avahi-utils >> $LOG_FILE 2>&1 || true
+                systemctl enable avahi-daemon >> $LOG_FILE 2>&1 || true
+                systemctl start avahi-daemon >> $LOG_FILE 2>&1 || true
+                ;;
+        esac
+        
+        log_info "Avahi components installed"
+    fi
 }
 
 # Install local user site packages if needed
