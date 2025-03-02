@@ -15,7 +15,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/cybex-pulse",
-    packages=find_packages(),
+    packages=find_packages(include=['cybex_pulse', 'cybex_pulse.*']),
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",

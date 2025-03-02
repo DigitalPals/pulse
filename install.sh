@@ -1148,9 +1148,40 @@ EOF
             echo "Import test output: $TEST_OUTPUT" >> $LOG_FILE
             warning "The application may not work correctly. Check the log for details."
             
-            # Create a symlink as a last resort
+            # Create a symlink as a last resort - find the correct Python version directory first
             echo "Creating symlink as last resort..." >> $LOG_FILE
-            ln -sf $INSTALL_DIR $INSTALL_DIR/venv/lib/python*/site-packages/cybex_pulse >> $LOG_FILE 2>&1
+            PYTHON_VERSION=$($INSTALL_DIR/venv/bin/python -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}')")
+            SITE_PACKAGES_DIR=$INSTALL_DIR/venv/lib/$PYTHON_VERSION/site-packages
+            echo "Python version: $PYTHON_VERSION, site-packages: $SITE_PACKAGES_DIR" >> $LOG_FILE
+            
+            # Ensure directory exists
+            mkdir -p $SITE_PACKAGES_DIR >> $LOG_FILE 2>&1
+            
+            # Create the symlink
+            echo "Creating symlink from $INSTALL_DIR to $SITE_PACKAGES_DIR/cybex_pulse" >> $LOG_FILE
+            ln -sf $INSTALL_DIR $SITE_PACKAGES_DIR/cybex_pulse >> $LOG_FILE 2>&1
+            
+            # Create an empty __init__.py in site-packages
+            touch $SITE_PACKAGES_DIR/cybex_pulse.py >> $LOG_FILE 2>&1
+            echo "import sys, os; sys.path.insert(0, '$INSTALL_DIR'); from cybex_pulse import *" > $SITE_PACKAGES_DIR/cybex_pulse.py
+            
+            # Install directly to site-packages
+            echo "Installing directly to site-packages..." >> $LOG_FILE
+            cd $INSTALL_DIR && cp -r . $SITE_PACKAGES_DIR/cybex_pulse_direct >> $LOG_FILE 2>&1
+            touch $SITE_PACKAGES_DIR/cybex_pulse_direct/__init__.py >> $LOG_FILE 2>&1
+            
+            # Create a .pth file to add the installation directory to Python path
+            echo "Creating .pth file..." >> $LOG_FILE
+            echo "$INSTALL_DIR" > $SITE_PACKAGES_DIR/cybex_pulse.pth
+            
+            # Try import again after these desperate measures
+            if $INSTALL_DIR/venv/bin/python -c "import cybex_pulse; print('Finally imported successfully')" >> $LOG_FILE 2>&1; then
+                echo -e "${CHECK_MARK} ${GREEN}Fixed with fallback method${NC}"
+                echo "SUCCESS: Fixed Cybex Pulse module import with fallback method" >> $LOG_FILE
+            else
+                echo -e "${CROSS_MARK} ${RED}All attempts failed${NC}"
+                echo "FAILED: All import fix attempts failed" >> $LOG_FILE
+            fi
         fi
     fi
     
