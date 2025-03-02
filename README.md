@@ -24,13 +24,13 @@
   <h3>🚀 Quick Start</h3>
 </div>
 
-```bash
-# One-line installation (Debian/Ubuntu)
-curl -sSL https://raw.githubusercontent.com/DigitalPals/pulse/main/install.sh | sudo bash
+One-line installation (Debian/Ubuntu):
 
-# Access the web interface
-# http://YOUR_IP_ADDRESS:8000
+```bash
+curl -sSL https://raw.githubusercontent.com/DigitalPals/pulse/main/install.sh | sudo bash
 ```
+
+After installation, access the web interface at http://YOUR_IP_ADDRESS:8000
 
 ---
 
