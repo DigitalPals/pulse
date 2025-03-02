@@ -470,6 +470,24 @@
             </div>
             <div class="card-body">
                 <div class="system-tools">
+                    <!-- Internet Health Tools -->
+                    <div class="tool-status-card {% if tool_status.get('speedtest-cli', False) %}tool-installed{% else %}tool-missing{% endif %}">
+                        <div class="tool-icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <div class="tool-info">
+                            <div class="tool-name">speedtest-cli</div>
+                            <div class="tool-desc">Internet speed testing</div>
+                        </div>
+                        <div class="tool-status">
+                            {% if tool_status.get('speedtest-cli', False) %}
+                                <span class="status-badge installed"><i class="fas fa-check-circle"></i> Installed</span>
+                            {% else %}
+                                <span class="status-badge missing"><i class="fas fa-times-circle"></i> Missing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
                     <!-- Network Discovery Tools -->
                     <div class="tool-status-card {% if tool_status.get('arp-scan', False) %}tool-installed{% else %}tool-missing{% endif %}">
                         <div class="tool-icon">
@@ -647,7 +665,7 @@
                 <p>Cybex Pulse uses several system utilities to provide comprehensive network monitoring and security analysis. Here's what each tool does:</p>
                 
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <h5>Network Discovery</h5>
                         <ul>
                             <li><strong>arp-scan</strong>: Discovers devices on your local network by sending ARP requests</li>
@@ -656,13 +674,19 @@
                             <li><strong>getent</strong>: Retrieves entries from name service databases (hosts, networks, etc.)</li>
                         </ul>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <h5>Security & Device Information</h5>
                         <ul>
                             <li><strong>nmap</strong>: Analyzes open ports and services on network devices</li>
                             <li><strong>snmpwalk</strong>: Retrieves detailed information from devices that support SNMP</li>
                             <li><strong>avahi-resolve</strong>: Resolves device hostnames using mDNS</li>
                             <li><strong>avahi-browse</strong>: Discovers services advertised on your network via mDNS/Bonjour</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h5>Internet Health</h5>
+                        <ul>
+                            <li><strong>speedtest-cli</strong>: Measures internet connection performance including download/upload speeds and latency</li>
                         </ul>
                     </div>
                 </div>

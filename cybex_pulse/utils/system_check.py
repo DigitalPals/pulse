@@ -24,7 +24,8 @@ def check_required_tools() -> Dict[str, bool]:
         "ip": False,
         "getent": False,
         "avahi-resolve": False,
-        "avahi-browse": False
+        "avahi-browse": False,
+        "speedtest-cli": False
     }
     
     # Check each tool
@@ -283,6 +284,40 @@ sudo pacman -S avahi
 macOS:
 ```
 brew install avahi
+```
+""",
+        "speedtest-cli": """
+To install speedtest-cli:
+
+Ubuntu/Debian:
+```
+sudo apt update
+sudo apt install speedtest-cli
+```
+
+CentOS/RHEL:
+```
+sudo yum install speedtest-cli
+```
+
+Fedora:
+```
+sudo dnf install speedtest-cli
+```
+
+Arch Linux:
+```
+sudo pacman -S speedtest-cli
+```
+
+macOS:
+```
+brew install speedtest-cli
+```
+
+Using pip (all systems):
+```
+pip install speedtest-cli
 ```
 """
     }

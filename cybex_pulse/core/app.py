@@ -9,6 +9,7 @@ This module contains the main application class for Cybex Pulse, responsible for
 """
 import json
 import logging
+import shutil
 import subprocess
 import threading
 import time
@@ -362,12 +363,19 @@ class CybexPulseApp:
         if stop_event is None:
             stop_event = self.stop_event
         
-        # Import here to avoid dependency if feature is disabled
-        try:
-            import speedtest
-        except ImportError:
-            self.logger.error("speedtest-cli not installed. Internet health check disabled.")
-            return
+        # Check if speedtest-cli is installed
+        if not shutil.which('speedtest-cli'):
+            # Try the Python module as fallback
+            try:
+                import speedtest
+                self.logger.info("Using Python speedtest module for internet health check")
+                use_cli = False
+            except ImportError:
+                self.logger.error("speedtest-cli not installed. Internet health check disabled.")
+                return
+        else:
+            self.logger.info("Using speedtest-cli command line tool for internet health check")
+            use_cli = True
         
         while not stop_event.is_set() and not self.stop_event.is_set():
             try:
@@ -377,18 +385,52 @@ class CybexPulseApp:
                 # Run speed test
                 self.logger.info("Running internet speed test")
                 
-                # Initialize speedtest with timeout settings
-                st = speedtest.Speedtest()
-                st.get_best_server()
-                
-                # Run tests and gather metrics
-                download_speed = st.download() / 1_000_000  # Convert to Mbps
-                upload_speed = st.upload() / 1_000_000  # Convert to Mbps
-                ping = st.results.ping
-                
-                # Get connection metadata
-                isp = st.results.client.get("isp", "Unknown")
-                server_name = st.results.server.get("name", "Unknown")
+                if use_cli:
+                    # Use the command line tool
+                    import json
+                    import subprocess
+                    
+                    try:
+                        # Run speedtest-cli with JSON output
+                        result = subprocess.run(
+                            ['speedtest-cli', '--json'],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        
+                        # Parse JSON output
+                        data = json.loads(result.stdout)
+                        
+                        # Extract metrics
+                        download_speed = data['download'] / 1_000_000  # Convert to Mbps
+                        upload_speed = data['upload'] / 1_000_000  # Convert to Mbps
+                        ping = data['ping']
+                        
+                        # Get connection metadata
+                        isp = data.get('client', {}).get('isp', 'Unknown')
+                        server_name = data.get('server', {}).get('name', 'Unknown')
+                    except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+                        self.logger.error(f"Error running speedtest-cli: {e}")
+                        self._sleep_with_check(60, stop_event)
+                        continue
+                else:
+                    # Use the Python module
+                    import speedtest
+                    
+                    # Initialize speedtest with timeout settings
+                    st = speedtest.Speedtest()
+                    st.get_best_server()
+                    
+                    # Run tests and gather metrics
+                    download_speed = st.download() / 1_000_000  # Convert to Mbps
+                    upload_speed = st.upload() / 1_000_000  # Convert to Mbps
+                    ping = st.results.ping
+                    
+                    # Get connection metadata
+                    isp = st.results.client.get("isp", "Unknown")
+                    server_name = st.results.server.get("name", "Unknown")
                 
                 # Log results
                 self.logger.info(f"Speed test results: {download_speed:.2f}/{upload_speed:.2f} Mbps, {ping:.2f} ms")
