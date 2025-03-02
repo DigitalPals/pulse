@@ -512,74 +512,88 @@ setup_directories() {
 # Python Environment Setup
 #######################################################
 
-# Setup Python virtual environment and install packages
+# Setup Python and install packages
 install_python_packages() {
-    progress "Creating Python virtual environment"
+    progress "Setting up Python environment"
     echo "===============================================" >> $LOG_FILE
     echo "Setting up Python environment..." >> $LOG_FILE
     
-    # Setup virtual environment
-    setup_virtual_environment
+    # Check system Python is available
+    setup_python_environment
     
     # Install Python packages
     install_python_dependencies
 }
 
-# Setup Python virtual environment
-setup_virtual_environment() {
-    echo -ne "${ARROW} ${CYAN}Creating Python virtual environment...${NC} "
-    echo "Creating Python virtual environment..." >> $LOG_FILE
+# Setup Python environment
+setup_python_environment() {
+    echo -ne "${ARROW} ${CYAN}Checking Python installation...${NC} "
+    echo "Checking Python installation..." >> $LOG_FILE
     
-    if python3 -m venv $INSTALL_DIR/venv >> $LOG_FILE 2>&1; then
-        echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
-    else
-        echo -e "${CROSS_MARK} ${RED}Failed${NC}"
-        echo "Failed to create virtual environment (see $LOG_FILE for details)" >> $LOG_FILE
+    if command -v python3 > /dev/null 2>&1; then
+        PYTHON_VERSION=$(python3 --version 2>&1)
+        PYTHON_VERSION_NUM=$(echo $PYTHON_VERSION | sed 's/Python //')
+        PYTHON_MAJOR=$(echo $PYTHON_VERSION_NUM | cut -d. -f1)
+        PYTHON_MINOR=$(echo $PYTHON_VERSION_NUM | cut -d. -f2)
         
-        # Try alternate approach if venv module fails
-        echo -ne "${ARROW} ${CYAN}Trying alternate approach with virtualenv...${NC} "
-        echo "Trying alternate approach with virtualenv..." >> $LOG_FILE
-        
-        # First try to install virtualenv if it's not already available
-        if ! command -v virtualenv > /dev/null; then
-            pip3 install virtualenv >> $LOG_FILE 2>&1
-        fi
-        
-        if virtualenv $INSTALL_DIR/venv >> $LOG_FILE 2>&1; then
-            echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+        if [ $PYTHON_MAJOR -ge 3 ] && [ $PYTHON_MINOR -ge 8 ]; then
+            echo -e "${CHECK_MARK} ${GREEN}Success${NC} ($PYTHON_VERSION)"
+            echo "SUCCESS: Found Python $PYTHON_VERSION_NUM" >> $LOG_FILE
         else
-            echo -e "${CROSS_MARK} ${RED}Failed${NC}"
-            error "Failed to create Python virtual environment. Continuing without isolation."
-            # Create directory anyway, we'll try to use system Python
-            mkdir -p $INSTALL_DIR/venv/bin
-            ln -sf $(which python3) $INSTALL_DIR/venv/bin/python
-            ln -sf $(which pip3) $INSTALL_DIR/venv/bin/pip
+            echo -e "${CROSS_MARK} ${RED}Version too old${NC}"
+            echo "WARNING: Python $PYTHON_VERSION_NUM found, but version 3.8+ is recommended" >> $LOG_FILE
+            warning "Python $PYTHON_VERSION_NUM found, but version 3.8+ is recommended. Continuing anyway."
         fi
+    else
+        echo -e "${CROSS_MARK} ${RED}Not found${NC}"
+        echo "ERROR: Python 3 not found" >> $LOG_FILE
+        error "Python 3 not found. Please install Python 3.8 or newer."
+        return 1
     fi
     
-    # Use the full path to pip to ensure we're using the venv
-    echo -ne "${ARROW} ${CYAN}Upgrading pip...${NC} "
-    echo "Upgrading pip..." >> $LOG_FILE
+    # Check if pip is available
+    echo -ne "${ARROW} ${CYAN}Checking pip installation...${NC} "
+    echo "Checking pip installation..." >> $LOG_FILE
     
-    if $INSTALL_DIR/venv/bin/pip install --upgrade pip >> $LOG_FILE 2>&1; then
+    if command -v pip3 > /dev/null 2>&1; then
+        PIP_VERSION=$(pip3 --version 2>&1)
+        echo -e "${CHECK_MARK} ${GREEN}Success${NC} ($(echo $PIP_VERSION | cut -d' ' -f1,2))"
+        echo "SUCCESS: Found pip: $PIP_VERSION" >> $LOG_FILE
+    else
+        echo -e "${CROSS_MARK} ${RED}Not found${NC}"
+        echo "ERROR: pip3 not found" >> $LOG_FILE
+        error "pip3 not found. Please install pip for Python 3."
+        return 1
+    fi
+    
+    # Create necessary directories
+    mkdir -p $INSTALL_DIR/bin $INSTALL_DIR/log
+    
+    # Create Python launcher script
+    echo -ne "${ARROW} ${CYAN}Creating Python launcher...${NC} "
+    echo "Creating Python launcher..." >> $LOG_FILE
+    
+    cat > $INSTALL_DIR/bin/cybex-python << EOF
+#!/bin/bash
+# Python launcher script for Cybex Pulse
+export PYTHONPATH=$INSTALL_DIR:\$PYTHONPATH
+python3 "\$@"
+EOF
+    chmod +x $INSTALL_DIR/bin/cybex-python
+    
+    if [ -x "$INSTALL_DIR/bin/cybex-python" ]; then
         echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+        echo "SUCCESS: Created Python launcher" >> $LOG_FILE
     else
         echo -e "${CROSS_MARK} ${RED}Failed${NC}"
-        warning "Failed to upgrade pip, but continuing with installation"
+        echo "WARNING: Failed to create Python launcher" >> $LOG_FILE
+        warning "Failed to create Python launcher, but continuing with installation"
     fi
     
-    # Verify the virtual environment
-    echo -ne "${ARROW} ${CYAN}Verifying virtual environment...${NC} "
-    if [ -f "$INSTALL_DIR/venv/bin/python" ] && [ -f "$INSTALL_DIR/venv/bin/pip" ]; then
-        VENV_PYTHON_VERSION=$($INSTALL_DIR/venv/bin/python --version 2>&1)
-        echo "Virtual environment Python version: $VENV_PYTHON_VERSION" >> $LOG_FILE
-        echo -e "${CHECK_MARK} ${GREEN}Success${NC} ($VENV_PYTHON_VERSION)"
-    else
-        echo -e "${CROSS_MARK} ${RED}Failed${NC}"
-        warning "Virtual environment verification failed, attempting to continue"
-    fi
+    # Create symlink to system Python
+    ln -sf $(which python3) /usr/local/bin/cybex-python
     
-    success "Python virtual environment created"
+    success "Python environment setup completed"
 }
 
 # Install Python dependencies
@@ -587,6 +601,18 @@ install_python_dependencies() {
     # Define core Python packages
     python_core_pkgs=("flask" "requests" "python-nmap")
     python_optional_pkgs=("speedtest-cli" "python-telegram-bot" "pyyaml" "click")
+    
+    # Determine which pip to use (system pip)
+    PIP_CMD="pip3"
+    
+    # Make sure pip is up-to-date
+    echo -ne "${ARROW} ${CYAN}Upgrading pip...${NC} "
+    if $PIP_CMD install --upgrade pip >> $LOG_FILE 2>&1; then
+        echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+    else
+        echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+        warning "Failed to upgrade pip, but continuing with installation"
+    fi
     
     # Install core Python packages
     echo -e "\n${BOLD}${WHITE}Installing Python dependencies:${NC}"
@@ -597,7 +623,7 @@ install_python_dependencies() {
         echo -ne "  ${ARROW} ${CYAN}Installing ${pkg}...${NC} "
         echo "Installing Python package: $pkg" >> $LOG_FILE
         
-        if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
+        if $PIP_CMD install $pkg >> $LOG_FILE 2>&1; then
             echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
             echo "SUCCESS: Installed Python package $pkg" >> $LOG_FILE
         else
@@ -617,7 +643,7 @@ install_python_dependencies() {
         echo -ne "  ${ARROW} ${CYAN}Installing ${pkg}...${NC} "
         echo "Installing optional Python package: $pkg" >> $LOG_FILE
         
-        if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
+        if $PIP_CMD install $pkg >> $LOG_FILE 2>&1; then
             echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
             echo "SUCCESS: Installed Python package $pkg" >> $LOG_FILE
         else
@@ -632,13 +658,33 @@ install_python_dependencies() {
         echo -ne "${ARROW} ${CYAN}Installing packages from requirements.txt...${NC} "
         echo "Installing requirements from requirements.txt..." >> $LOG_FILE
         
-        if $INSTALL_DIR/venv/bin/pip install -r $INSTALL_DIR/requirements.txt >> $LOG_FILE 2>&1; then
+        if $PIP_CMD install -r $INSTALL_DIR/requirements.txt >> $LOG_FILE 2>&1; then
             echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
             echo "SUCCESS: Installed packages from requirements.txt" >> $LOG_FILE
         else
             echo -e "${CROSS_MARK} ${RED}Failed${NC}"
             echo "FAILED: Could not install packages from requirements.txt" >> $LOG_FILE
             warning "Failed to install some packages from requirements.txt, but installation will continue"
+        fi
+    fi
+    
+    # Install the package directly to the system Python
+    if [ -d "$INSTALL_DIR" ]; then
+        echo -ne "${ARROW} ${CYAN}Installing cybex-pulse package to system Python...${NC} "
+        echo "Installing cybex-pulse package..." >> $LOG_FILE
+        cd $INSTALL_DIR
+        
+        # Ensure all directories have __init__.py files
+        find . -type d -not -path "*/\.*" -exec touch {}/__init__.py \; >> $LOG_FILE 2>&1
+        
+        # Install the package to the system Python
+        if $PIP_CMD install -e . >> $LOG_FILE 2>&1; then
+            echo -e "${CHECK_MARK} ${GREEN}Success${NC}"
+            echo "SUCCESS: Installed cybex-pulse package to system Python" >> $LOG_FILE
+        else
+            echo -e "${CROSS_MARK} ${RED}Failed${NC}"
+            echo "FAILED: Could not install cybex-pulse package to system Python" >> $LOG_FILE
+            warning "Failed to install cybex-pulse package, but installation will continue"
         fi
     fi
 }
@@ -1066,7 +1112,7 @@ chmod +x "\$INSTALL_DIR/run_app.py"
 # Run directly using the wrapper
 cd \$INSTALL_DIR
 export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH
-\$INSTALL_DIR/venv/bin/python "\$INSTALL_DIR/run_app.py" "\$@"
+python3 "\$INSTALL_DIR/run_app.py" "\$@"
 EOF
     chmod +x /usr/local/bin/cybex-pulse
     
@@ -1270,7 +1316,7 @@ Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/python -m cybex_pulse
+ExecStart=/usr/local/bin/cybex-pulse
 Restart=on-failure
 RestartSec=5
 StandardOutput=syslog
