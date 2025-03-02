@@ -1294,7 +1294,7 @@ print_completion() {
     
     echo
     echo -e "${YELLOW}${BOLD}Web Interface:${NC}"
-    echo -e "  After starting, access the web interface at ${BLUE}http://$IP_ADDRESS:8000${NC}"
+    echo -e "  After starting, access the web interface at ${BLUE}http://$IP_ADDRESS:8080${NC}"
     echo
     echo -e "${BLUE}Troubleshooting:${NC}"
     echo -e "  - If the application fails to start, check the log file: $LOG_FILE"
