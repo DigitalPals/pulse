@@ -274,24 +274,54 @@ class SetupWizard:
         try:
             # Get the hostname
             hostname = socket.gethostname()
-            # Get the IP address
+            # Default IP address from hostname
             ip_address = socket.gethostbyname(hostname)
+            detected_subnet = None
             
             # Try to get the network interface information
             if os.name == "posix":  # Linux/Mac
                 try:
-                    # Try to use ip command
+                    # First try to get subnet directly from 'ip route' command
                     result = subprocess.run(
-                        ["ip", "route", "get", "1.1.1.1"],
+                        ["ip", "route"],
                         capture_output=True,
                         text=True,
                         check=True
                     )
                     
-                    # Parse the output to get the source IP
-                    match = re.search(r"src\s+(\d+\.\d+\.\d+\.\d+)", result.stdout)
-                    if match:
-                        ip_address = match.group(1)
+                    # Look for default gateway and its associated subnet
+                    for line in result.stdout.splitlines():
+                        # Match default route
+                        if line.startswith("default via"):
+                            # Now look for the corresponding subnet definition
+                            gateway_match = re.search(r"via\s+(\d+\.\d+\.\d+\.\d+)", line)
+                            if gateway_match:
+                                gateway = gateway_match.group(1)
+                                # Get the interface from default route
+                                iface_match = re.search(r"dev\s+(\S+)", line)
+                                if iface_match:
+                                    iface = iface_match.group(1)
+                                    # Now find the subnet for this interface
+                                    for iface_line in result.stdout.splitlines():
+                                        if iface in iface_line and "proto kernel" in iface_line:
+                                            subnet_match = re.search(r"(\d+\.\d+\.\d+\.\d+/\d+)", iface_line)
+                                            if subnet_match:
+                                                detected_subnet = subnet_match.group(1)
+                                                break
+                    
+                    # If subnet not found, try to get source IP from ip route get
+                    if not detected_subnet:
+                        result = subprocess.run(
+                            ["ip", "route", "get", "1.1.1.1"],
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+                        
+                        # Parse the output to get the source IP
+                        match = re.search(r"src\s+(\d+\.\d+\.\d+\.\d+)", result.stdout)
+                        if match:
+                            ip_address = match.group(1)
                 except (subprocess.SubprocessError, FileNotFoundError):
                     # Fallback to ifconfig
                     try:
@@ -312,11 +342,28 @@ class SetupWizard:
                         # Use the hostname method as fallback
                         pass
             
-            # Convert IP to subnet
+            # If we found a subnet directly from ip route, return it
+            if detected_subnet:
+                return detected_subnet
+                
+            # Otherwise convert IP to subnet intelligently
             ip_obj = ipaddress.IPv4Address(ip_address)
             
-            # Assume a /24 subnet for common home networks
-            network = ipaddress.IPv4Network(f"{ip_obj.packed[0]}.{ip_obj.packed[1]}.{ip_obj.packed[2]}.0/24", strict=False)
+            # Try to infer from common network patterns
+            first_octet = ip_obj.packed[0]
+            if first_octet == 10:  # Class A private networks often use /8, /16, /23, or /24
+                # Check for special case of 10.10.x.y which might be a /23
+                if ip_obj.packed[1] == 10 and (ip_obj.packed[2] in [0, 1]):
+                    network = ipaddress.IPv4Network(f"10.10.0.0/23", strict=False)
+                else:
+                    # Default to /24 for other 10.x.y.z networks
+                    network = ipaddress.IPv4Network(f"{ip_obj.packed[0]}.{ip_obj.packed[1]}.{ip_obj.packed[2]}.0/24", strict=False)
+            elif first_octet == 172 and 16 <= ip_obj.packed[1] <= 31:  # Class B private
+                network = ipaddress.IPv4Network(f"{ip_obj.packed[0]}.{ip_obj.packed[1]}.{ip_obj.packed[2]}.0/24", strict=False)
+            elif first_octet == 192 and ip_obj.packed[1] == 168:  # Class C private
+                network = ipaddress.IPv4Network(f"{ip_obj.packed[0]}.{ip_obj.packed[1]}.{ip_obj.packed[2]}.0/24", strict=False)
+            else:  # Default for other networks
+                network = ipaddress.IPv4Network(f"{ip_obj.packed[0]}.{ip_obj.packed[1]}.{ip_obj.packed[2]}.0/24", strict=False)
             
             return str(network)
         except Exception as e:
