@@ -343,8 +343,15 @@ create_launcher() {
 #!/bin/bash
 # Launcher script for Cybex Pulse
 
+# Determine the absolute path to the script directory
 SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="\$SCRIPT_DIR/$VENV_DIR"
+VENV_DIR="\$SCRIPT_DIR/venv"
+
+# Check if virtual environment exists
+if [ ! -d "\$VENV_DIR" ]; then
+    echo "Error: Virtual environment not found at \$VENV_DIR"
+    exit 1
+fi
 
 # Activate the virtual environment
 source "\$VENV_DIR/bin/activate"
@@ -352,8 +359,8 @@ source "\$VENV_DIR/bin/activate"
 # Set Python path to include our directory
 export PYTHONPATH="\$SCRIPT_DIR:\$SCRIPT_DIR/cybex_pulse:\$PYTHONPATH"
 
-# Run the application
-python -m cybex_pulse "\$@"
+# Run the application with the full path to python
+\$VENV_DIR/bin/python -m cybex_pulse "\$@"
 EOF
 
     # Make it executable
