@@ -379,9 +379,9 @@ install_python_packages() {
     echo "Upgrading pip..." >> $LOG_FILE
     
     if $INSTALL_DIR/venv/bin/pip install --upgrade pip >> $LOG_FILE 2>&1; then
-        echo -e "${GREEN}Success${NC}"
+        echo -e "${GREEN}[SUCCESS]${NC}"
     else
-        echo -e "${RED}Failed${NC}"
+        echo -e "${RED}[FAILED]${NC}"
         warning "Failed to upgrade pip, but continuing with installation"
     fi
     
@@ -402,10 +402,10 @@ install_python_packages() {
         echo "Installing Python package: $pkg" >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Installed Python package $pkg" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not install Python package $pkg" >> $LOG_FILE
             py_core_success=false
         fi
@@ -422,10 +422,10 @@ install_python_packages() {
         echo "Installing optional Python package: $pkg" >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Installed Python package $pkg" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not install Python package $pkg" >> $LOG_FILE
             warning "Optional Python package $pkg could not be installed, but installation will continue"
         fi
@@ -437,10 +437,10 @@ install_python_packages() {
         echo "Installing requirements from requirements.txt..." >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install -r $INSTALL_DIR/requirements.txt >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Installed packages from requirements.txt" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not install packages from requirements.txt" >> $LOG_FILE
             warning "Failed to install some packages from requirements.txt, but installation will continue"
         fi
@@ -462,10 +462,10 @@ copy_application() {
         
         echo -ne "${CYAN}Copying application files from local directory...${NC} "
         if cp -r $CURRENT_DIR/cybex_pulse/* $INSTALL_DIR/ >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Copied application files from local directory" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not copy application files from local directory" >> $LOG_FILE
             error "Failed to copy application files"
         fi
@@ -474,17 +474,17 @@ copy_application() {
         echo -ne "${CYAN}Installing executables...${NC} "
         mkdir -p /usr/local/bin
         if cp $CURRENT_DIR/pulse /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1 && chmod +x /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Installed executable" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not install executable" >> $LOG_FILE
             error "Failed to install executable"
         fi
     else
         # We need to download the repository
         progress "Downloading repository from GitHub"
-        echo "No local repository found, downloading from GitHub..." | tee -a $LOG_FILE
+        echo -e "${CYAN}No local repository found, downloading from GitHub...${NC}" | tee -a $LOG_FILE
         
         TEMP_DIR=$(mktemp -d)
         echo "Created temporary directory: $TEMP_DIR" >> $LOG_FILE
@@ -528,10 +528,10 @@ copy_application() {
             esac
             
             if command -v git > /dev/null; then
-                echo -e "${GREEN}Success${NC}"
+                echo -e "${GREEN}[SUCCESS]${NC}"
                 echo "SUCCESS: Installed git" >> $LOG_FILE
             else
-                echo -e "${RED}Failed${NC}"
+                echo -e "${RED}[FAILED]${NC}"
                 echo "FAILED: Could not install git" >> $LOG_FILE
                 
                 # Try alternate download method if git fails
@@ -543,16 +543,16 @@ copy_application() {
                     cd $TEMP_DIR
                     if curl -L https://github.com/DigitalPals/pulse/archive/main.tar.gz -o pulse.tar.gz >> $LOG_FILE 2>&1 && 
                        tar -xzf pulse.tar.gz >> $LOG_FILE 2>&1; then
-                        echo -e "${GREEN}Success${NC}"
+                        echo -e "${GREEN}[SUCCESS]${NC}"
                         echo "SUCCESS: Downloaded repository using curl" >> $LOG_FILE
                         mv pulse-main/* .
                     else
-                        echo -e "${RED}Failed${NC}"
+                        echo -e "${RED}[FAILED]${NC}"
                         echo "FAILED: Could not download repository using curl" >> $LOG_FILE
                         error "Failed to download repository. Please try installing git manually and run the script again."
                     fi
                 else
-                    echo -e "${RED}Failed${NC}"
+                    echo -e "${RED}[FAILED]${NC}"
                     echo "FAILED: Neither git nor curl is available" >> $LOG_FILE
                     error "Failed to download repository. Please install git or curl manually and run the script again."
                 fi
@@ -564,11 +564,11 @@ copy_application() {
         echo "Cloning repository from GitHub..." >> $LOG_FILE
         
         if git clone https://github.com/DigitalPals/pulse.git $TEMP_DIR/pulse >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Cloned repository" >> $LOG_FILE
             cd $TEMP_DIR/pulse
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not clone repository" >> $LOG_FILE
             
             # Try alternate download method if git clone fails
@@ -578,11 +578,11 @@ copy_application() {
             cd $TEMP_DIR
             if curl -L https://github.com/DigitalPals/pulse/archive/main.tar.gz -o pulse.tar.gz >> $LOG_FILE 2>&1 && 
                tar -xzf pulse.tar.gz >> $LOG_FILE 2>&1; then
-                echo -e "${GREEN}Success${NC}"
+                echo -e "${GREEN}[SUCCESS]${NC}"
                 echo "SUCCESS: Downloaded repository using curl" >> $LOG_FILE
                 cd pulse-main
             else
-                echo -e "${RED}Failed${NC}"
+                echo -e "${RED}[FAILED]${NC}"
                 echo "FAILED: Could not download repository using alternate method" >> $LOG_FILE
                 error "Failed to download repository. Installation cannot continue."
                 return 1
@@ -594,10 +594,10 @@ copy_application() {
         echo "Copying application files to installation directory..." >> $LOG_FILE
         
         if cp -r cybex_pulse/* $INSTALL_DIR/ >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Copied application files" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not copy application files" >> $LOG_FILE
             error "Failed to copy application files. Installation may be incomplete."
         fi
@@ -608,10 +608,10 @@ copy_application() {
         
         mkdir -p /usr/local/bin
         if [ -f "pulse" ] && cp pulse /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1 && chmod +x /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Installed executable" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not install executable" >> $LOG_FILE
             
             # Create a basic executable if the original is not available
@@ -627,10 +627,10 @@ EOF
             chmod +x /usr/local/bin/cybex-pulse
             
             if [ -x /usr/local/bin/cybex-pulse ]; then
-                echo -e "${GREEN}Success${NC}"
+                echo -e "${GREEN}[SUCCESS]${NC}"
                 echo "SUCCESS: Created basic executable" >> $LOG_FILE
             else
-                echo -e "${RED}Failed${NC}"
+                echo -e "${RED}[FAILED]${NC}"
                 echo "FAILED: Could not create basic executable" >> $LOG_FILE
                 error "Failed to create executable. You may need to run the application manually."
             fi
@@ -641,10 +641,10 @@ EOF
         echo "Cleaning up temporary files..." >> $LOG_FILE
         
         if cd / && rm -rf $TEMP_DIR >> $LOG_FILE 2>&1; then
-            echo -e "${GREEN}Success${NC}"
+            echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Cleaned up temporary files" >> $LOG_FILE
         else
-            echo -e "${RED}Failed${NC}"
+            echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not clean up temporary files" >> $LOG_FILE
             warning "Failed to clean up temporary files, but installation can continue"
         fi
@@ -657,10 +657,10 @@ EOF
     echo "Creating Python symlink..." >> $LOG_FILE
     
     if ln -sf $INSTALL_DIR/venv/bin/python /usr/local/bin/cybex-pulse-python >> $LOG_FILE 2>&1; then
-        echo -e "${GREEN}Success${NC}"
+        echo -e "${GREEN}[SUCCESS]${NC}"
         echo "SUCCESS: Created Python symlink" >> $LOG_FILE
     else
-        echo -e "${RED}Failed${NC}"
+        echo -e "${RED}[FAILED]${NC}"
         echo "FAILED: Could not create Python symlink" >> $LOG_FILE
         warning "Failed to create Python symlink, but installation can continue"
     fi
