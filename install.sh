@@ -961,8 +961,8 @@ create_wrapper_script() {
     # Get the full path
     INSTALL_DIR=$(pwd)
     
-    # Create the wrapper script in the root directory
-    cat > pulse << EOF
+    # Create the wrapper script with a different name to avoid collision with directory
+    cat > cybex-pulse << EOF
 #!/bin/bash
 # Wrapper script for Cybex Pulse
 
@@ -980,8 +980,17 @@ if ! command -v "\$PYTHON_CMD" &> /dev/null; then
     done
 fi
 
-# Add the current directory to the Python path
-export PYTHONPATH="${INSTALL_DIR}/pulse:\$PYTHONPATH"
+# Add the proper paths to PYTHONPATH
+if [ -d "cybex_pulse" ]; then
+    # We're in the repo directory
+    export PYTHONPATH="$(pwd):\$PYTHONPATH"
+elif [ -d "pulse/cybex_pulse" ]; then
+    # We're in a parent directory
+    export PYTHONPATH="$(pwd)/pulse:\$PYTHONPATH"
+else
+    # Fallback
+    export PYTHONPATH="${INSTALL_DIR}:\$PYTHONPATH"
+fi
 
 # Fix for externally-managed-environment on newer Python installations
 if [ -z "\${PYTHONPATH_IGNORE_PEP668+x}" ]; then
@@ -993,7 +1002,12 @@ exec "\$PYTHON_CMD" -m cybex_pulse "\$@" 2> >(grep -v 'BrokenPipeError' >&2)
 EOF
 
     # Make it executable
-    chmod +x pulse
+    chmod +x cybex-pulse
+    
+    # Create a symlink for backward compatibility
+    if [ ! -d "pulse" ]; then
+        ln -sf cybex-pulse pulse
+    fi
     
     log_success "Wrapper script created"
 }
@@ -1014,9 +1028,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/pulse
+ExecStart=${INSTALL_DIR}/cybex-pulse
 WorkingDirectory=${INSTALL_DIR}
-Environment="PYTHONPATH=${INSTALL_DIR}/pulse:${INSTALL_DIR}"
+Environment="PYTHONPATH=${INSTALL_DIR}"
 Environment="PYTHONPATH_IGNORE_PEP668=1"
 Restart=on-failure
 RestartSec=10
@@ -1189,9 +1203,9 @@ verify_installation() {
     fi
     
     # Check if wrapper script works
-    if [ -f "${INSTALL_DIR}/pulse" ]; then
+    if [ -f "${INSTALL_DIR}/cybex-pulse" ]; then
         log_success "Wrapper script created successfully"
-    elif [ -f "${CURRENT_DIR}/pulse" ]; then
+    elif [ -f "${CURRENT_DIR}/cybex-pulse" ]; then
         log_success "Wrapper script created successfully"
     else
         log_warning "Wrapper script not found at expected location. It might be in a different path."
@@ -1237,7 +1251,7 @@ print_completion() {
     fi
     
     echo -e "\n${GREEN}Usage Instructions:${NC}"
-    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/pulse"
+    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/cybex-pulse"
     
     if command -v systemctl &>/dev/null && [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
         echo -e "  - ${BOLD}Start as a service:${NC} sudo systemctl start cybex-pulse"
