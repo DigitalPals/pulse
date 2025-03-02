@@ -1,29 +1,115 @@
-# <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="40"/> Cybex Pulse
+<div align="center">
+  <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="120"/>
+  
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+    <a href="https://github.com/cybex/Pulse"><img src="https://img.shields.io/badge/Version-1.0.0-green.svg" alt="Version"></a>
+    <a href="https://github.com/cybex/Pulse/issues"><img src="https://img.shields.io/github/issues/DigitalPals/pulse?color=red" alt="Issues"></a>
+    <a href="https://github.com/cybex/Pulse/stargazers"><img src="https://img.shields.io/github/stars/DigitalPals/pulse?color=yellow" alt="Stars"></a>
+  </p>
+</div>
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)](https://github.com/cybex/Pulse)
+<div align="center">
+  <p><strong>A powerful home network monitoring tool that provides real-time insights into your network devices, internet performance, and security threats.</strong></p>
+  <p><em>Keep your home network safe, optimized, and always under your control</em></p>
 
-A powerful home network monitoring tool that provides real-time insights into your network devices, internet performance, and security threats.
+  <a href="#installation">Installation</a> •
+  <a href="#features">Features</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#license">License</a>
+</div>
+
+---
+
+<div align="center">
+  <h3>🚀 Quick Start</h3>
+</div>
+
+```bash
+# One-line installation (Debian/Ubuntu)
+curl -sSL https://get.cybex.net/pulse | sudo bash
+
+# Access the web interface
+# http://YOUR_IP_ADDRESS:8000
+# Username: admin
+# Password: cybexpulse
+```
+
+---
 
 ## 🚀 Features
 
-- **Network Discovery** - Automatically detect and monitor all devices on your network
-- **Device Fingerprinting** - Identify device types, vendors, and models
-- **Internet Health** - Track speed, latency, and reliability over time
-- **Website Monitoring** - Monitor the availability of your important websites
-- **Security Scanning** - Detect potential security vulnerabilities
-- **Real-time Alerts** - Get notified when new devices join or important devices go offline
-- **Beautiful Dashboard** - Intuitive web interface for managing all aspects of your network
+<table>
+  <tr>
+    <td width="50%">
+      <h3>🔍 Network Discovery</h3>
+      <p>Automatically detect and monitor all devices on your network with intelligent periodic scanning</p>
+    </td>
+    <td width="50%">
+      <h3>👆 Device Fingerprinting</h3>
+      <p>Identify device types, vendors, and models through advanced classification algorithms</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>📊 Internet Health</h3>
+      <p>Track speed, latency, and reliability over time with detailed historical metrics</p>
+    </td>
+    <td width="50%">
+      <h3>🌐 Website Monitoring</h3>
+      <p>Monitor the availability of your important websites and receive alerts when they're down</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🔐 Security Scanning</h3>
+      <p>Detect potential security vulnerabilities and unprotected devices on your network</p>
+    </td>
+    <td width="50%">
+      <h3>⚡ Real-time Alerts</h3>
+      <p>Get notified when new devices join, important devices go offline, or security issues arise</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <h3>✨ Beautiful Dashboard</h3>
+      <p>Intuitive web interface for managing all aspects of your network with responsive design for mobile and desktop</p>
+    </td>
+  </tr>
+</table>
 
 ## 📋 Requirements
 
-- Linux-based operating system (Debian, Ubuntu, Fedora, CentOS, etc.)
-- Root privileges (required for network scanning and device fingerprinting)
-- Python 3.6 or higher
+<table>
+  <tr>
+    <td><strong>🐧 Operating System</strong></td>
+    <td>Linux-based OS (Debian, Ubuntu, Fedora, CentOS, etc.)</td>
+  </tr>
+  <tr>
+    <td><strong>🔑 Privileges</strong></td>
+    <td>Root access (required for network scanning and device fingerprinting)</td>
+  </tr>
+  <tr>
+    <td><strong>🐍 Python</strong></td>
+    <td>Python 3.6 or higher with pip</td>
+  </tr>
+  <tr>
+    <td><strong>🌐 Network</strong></td>
+    <td>Ethernet or WiFi connection with access to your local network</td>
+  </tr>
+  <tr>
+    <td><strong>💾 Storage</strong></td>
+    <td>At least 500MB free disk space for installation and database</td>
+  </tr>
+</table>
 
 ## 💻 Installation
 
-### Quick Install (Recommended)
+<details open>
+<summary><strong>Quick Install (Recommended)</strong></summary>
+
+The quick installation method will automatically set up everything you need, including dependencies, service configuration, and initial database setup.
 
 ```bash
 # Clone the repository
@@ -34,50 +120,207 @@ cd Pulse
 sudo ./install.sh
 ```
 
-### Manual Installation
+Once installed, the service will automatically start and be configured to run on system boot.
+</details>
 
-1. Clone this repository
+<details>
+<summary><strong>Manual Installation</strong></summary>
+
+If you prefer to control each step of the installation process, follow these instructions:
+
+#### 1. Clone the Repository
 ```bash
 git clone https://github.com/cybex/Pulse.git
 cd Pulse
 ```
 
-2. Set up a virtual environment
+#### 2. Set Up a Virtual Environment
 ```bash
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install dependencies
+#### 3. Install Dependencies
 ```bash
 pip install -r cybex_pulse/requirements.txt
 pip install -e .
 ```
 
-4. Run the application
+#### 4. Initialize the Database
+```bash
+# Create initial database schema
+python -m cybex_pulse.database.db_manager --init
+```
+
+#### 5. Run the Application
 ```bash
 ./pulse
 ```
 
+For running as a service, create a systemd service file manually:
+```bash
+sudo nano /etc/systemd/system/cybex-pulse.service
+```
+
+Add the following content (adjust paths as needed):
+```
+[Unit]
+Description=Cybex Pulse Network Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/Pulse
+ExecStart=/opt/Pulse/pulse
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable cybex-pulse
+sudo systemctl start cybex-pulse
+```
+</details>
+
+<details>
+<summary><strong>Docker Installation</strong></summary>
+
+For those who prefer containerized deployments, we provide a Docker image:
+
+```bash
+# Pull the image
+docker pull cybex/pulse:latest
+
+# Run with necessary network access
+docker run -d \
+  --name cybex-pulse \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add NET_RAW \
+  -v pulse-data:/opt/cybex-pulse/data \
+  cybex/pulse:latest
+```
+
+**Note:** The container requires host networking and specific capabilities to perform network scanning.
+</details>
+
 ## ⚙️ Configuration
 
-On first run, Cybex Pulse will create a default configuration file in `~/.cybex_pulse/config.json`. 
-You can modify this file directly or use the web interface to adjust settings.
+<details open>
+<summary><strong>Initial Setup</strong></summary>
 
-## 🌐 Access the Web Interface
+On first run, Cybex Pulse will launch a setup wizard to guide you through the configuration process. 
+The wizard helps you:
 
-By default, the web interface is available at:
-- URL: http://YOUR_IP_ADDRESS:8000
+- Configure network interfaces for monitoring
+- Set up email notifications (optional)
+- Customize scanning intervals
+- Configure security monitoring options
 
-## 🔐 Why Root Privileges Are Required
+After initial setup, a configuration file is created at `~/.cybex_pulse/config.json`. 
+You can modify this file directly or use the web interface settings panel.
+</details>
+
+<details>
+<summary><strong>Advanced Configuration Options</strong></summary>
+
+The configuration file supports the following advanced options:
+
+```json
+{
+  "network": {
+    "interfaces": ["eth0"],
+    "scan_interval": 300,
+    "exclude_ips": ["192.168.1.1"],
+    "exclude_macs": ["00:11:22:33:44:55"]
+  },
+  "security": {
+    "vuln_scan_enabled": true,
+    "vuln_scan_interval": 86400,
+    "port_scan_enabled": true
+  },
+  "monitoring": {
+    "speed_test_interval": 3600,
+    "website_check_interval": 300
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.example.com",
+      "smtp_port": 587,
+      "username": "user@example.com",
+      "password": "",
+      "recipients": ["user@example.com"]
+    },
+    "pushover": {
+      "enabled": false,
+      "user_key": "",
+      "app_token": ""
+    }
+  }
+}
+```
+</details>
+
+## 🌐 Web Interface
+
+<div align="center">
+  <table>
+    <tr>
+      <td><strong>Default URL</strong></td>
+      <td>http://YOUR_IP_ADDRESS:8000</td>
+    </tr>
+    <tr>
+      <td><strong>Default Credentials</strong></td>
+      <td>Username: <code>admin</code> / Password: <code>cybexpulse</code></td>
+    </tr>
+    <tr>
+      <td><strong>First-time Login</strong></td>
+      <td>You'll be prompted to change the default password</td>
+    </tr>
+  </table>
+</div>
+
+<p align="center">⚠️ <strong>IMPORTANT:</strong> Change the default password immediately after installation</p>
+
+## 🔐 Security Considerations
+
+<details open>
+<summary><strong>Why Root Privileges Are Required</strong></summary>
 
 Cybex Pulse requires root privileges for several reasons:
+
 - **Network Scanning**: To perform comprehensive network scans using tools like nmap
 - **ARP Table Access**: To monitor device presence on the network
 - **Port Binding**: To bind to privileged ports for certain monitoring functions
 - **System Service Installation**: To install and run as a system service
 
-## 🐳 Running on Proxmox Containers
+We've designed the software to operate with the minimum necessary privileges while still providing powerful network monitoring capabilities.
+</details>
+
+<details>
+<summary><strong>Data Privacy</strong></summary>
+
+Cybex Pulse respects your privacy:
+
+- All data is stored locally on your system
+- No data is sent to external servers
+- No telemetry or usage statistics are collected
+- Network scan data never leaves your local network
+
+The software only monitors devices on your local network and does not perform any external scanning or data collection beyond what you explicitly configure (like website monitoring).
+</details>
+
+## 🐳 Advanced Deployment Options
+
+<details>
+<summary><strong>Running on Proxmox Containers</strong></summary>
 
 When running Cybex Pulse in a Proxmox container, you need to ensure the container has:
 
@@ -96,33 +339,95 @@ When running Cybex Pulse in a Proxmox container, you need to ensure the containe
 
 3. **Additional Network Configuration**:
    - Ensure the container has its own network interface in bridge mode
+</details>
+
+<details>
+<summary><strong>Running on Synology NAS</strong></summary>
+
+Cybex Pulse can be installed on Synology NAS devices using Docker:
+
+1. Install the Docker package from Synology Package Center
+2. Open Docker and go to Registry
+3. Search for "cybex/pulse" and download the latest image
+4. Create a container with the following settings:
+   - Use host network
+   - Add volume mapping: `/volume1/docker/cybex-pulse:/opt/cybex-pulse/data`
+   - Add environment variables:
+     - `TZ=your_timezone`
+     - `PULSE_WEB_PORT=8000` (or your preferred port)
+   - Add capability: NET_ADMIN, NET_RAW
+5. Start the container
+
+You can access the web interface at http://your_synology_ip:8000
+</details>
 
 ## 📊 Screenshots
 
 <div align="center">
-  <img src="cybex_pulse/docs/dashboard.png" alt="Dashboard" width="45%"/>
-  <img src="cybex_pulse/docs/devices.png" alt="Devices" width="45%"/>
+  <p><strong>Dashboard & Device Management</strong></p>
+  <img src="cybex_pulse/docs/dashboard.png" alt="Dashboard" width="90%" style="max-width:800px"/>
+  
+  <p><strong>Network Map & Security Insights</strong></p>
+  <img src="cybex_pulse/docs/devices.png" alt="Devices" width="90%" style="max-width:800px"/>
 </div>
 
 ## 🛠️ Service Management
 
-```bash
-# Start the service
-sudo systemctl start cybex-pulse
+<table>
+  <tr>
+    <th colspan="2">Managing the Cybex Pulse Service</th>
+  </tr>
+  <tr>
+    <td><strong>Start Service</strong></td>
+    <td><code>sudo systemctl start cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>Stop Service</strong></td>
+    <td><code>sudo systemctl stop cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>Restart Service</strong></td>
+    <td><code>sudo systemctl restart cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>Check Status</strong></td>
+    <td><code>sudo systemctl status cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>View Logs</strong></td>
+    <td><code>sudo journalctl -u cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>Enable at Boot</strong></td>
+    <td><code>sudo systemctl enable cybex-pulse</code></td>
+  </tr>
+  <tr>
+    <td><strong>Disable at Boot</strong></td>
+    <td><code>sudo systemctl disable cybex-pulse</code></td>
+  </tr>
+</table>
 
-# Stop the service
-sudo systemctl stop cybex-pulse
+## 🤝 Contributing
 
-# Restart the service
-sudo systemctl restart cybex-pulse
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-# Check status
-sudo systemctl status cybex-pulse
-
-# View logs
-sudo journalctl -u cybex-pulse
-```
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
 This project is licensed under the terms of the MIT license included in the repository.
+
+---
+
+<div align="center">
+  <p>Made with ❤️ by <a href="https://cybex.net">Cybex</a></p>
+  <p>
+    <a href="https://cybex.net">Website</a> •
+    <a href="https://github.com/DigitalPals">GitHub</a> •
+    <a href="https://twitter.com/CybexSecurity">Twitter</a>
+  </p>
+</div>
