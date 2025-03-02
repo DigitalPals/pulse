@@ -1,5 +1,12 @@
 """
 Setup wizard for Cybex Pulse.
+
+This module provides an interactive command-line setup wizard that helps users:
+- Configure network settings
+- Set up alerting channels
+- Configure the web interface
+- Enable and configure device fingerprinting
+- Set up additional monitoring features
 """
 import ipaddress
 import json
@@ -17,7 +24,12 @@ from cybex_pulse.utils.config import Config
 logger = logging.getLogger("cybex_pulse.setup_wizard")
 
 class SetupWizard:
-    """Setup wizard for Cybex Pulse application."""
+    """Setup wizard for Cybex Pulse application.
+    
+    This class provides a user-friendly command-line interface for initial system configuration,
+    walking users through each configuration section with appropriate prompts, validation,
+    and auto-detection where possible.
+    """
     
     def __init__(self, config: Config, db_manager: DatabaseManager):
         """Initialize setup wizard.

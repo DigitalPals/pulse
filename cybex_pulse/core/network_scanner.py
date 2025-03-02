@@ -1,5 +1,11 @@
 """
 Network scanner module for Cybex Pulse.
+
+This module provides functionality for:
+- Discovering devices on local networks using various scanning methods
+- Detecting when devices connect to or disconnect from the network
+- Identifying device types through basic vendor detection
+- Integration with advanced device fingerprinting system
 """
 import json
 import logging
@@ -14,7 +20,15 @@ from cybex_pulse.core.alerting import AlertManager
 from cybex_pulse.fingerprinting.scanner import DeviceFingerprinter
 
 class NetworkScanner:
-    """Network scanner for detecting devices on the local network."""
+    """Network scanner for detecting and fingerprinting devices on the local network.
+    
+    This class is responsible for:
+    - Discovering devices using nmap or arp-scan
+    - Tracking device connections and disconnections
+    - Basic device identification using MAC/vendor mapping
+    - Integration with advanced fingerprinting system
+    - Alerting on new device detection
+    """
     
     def __init__(self, config: Config, db_manager: DatabaseManager, logger: logging.Logger):
         """Initialize the network scanner.

@@ -1,5 +1,11 @@
 """
 Alerting module for Cybex Pulse.
+
+This module handles alerting functionality through:
+- Notification routing and delivery to multiple channels
+- Alert logging and persistence
+- Alert formatting and prioritization
+- Integration with Telegram for mobile alerts
 """
 import json
 import logging
@@ -10,7 +16,14 @@ from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
 
 class AlertManager:
-    """Alert manager for sending notifications."""
+    """Alert manager for sending notifications across various channels.
+    
+    This class is responsible for:
+    - Routing alerts to configured notification channels
+    - Persisting alerts to the database
+    - Formatting alert messages appropriately for each channel
+    - Managing alert thresholds and severity levels
+    """
     
     def __init__(self, config: Config, db_manager: DatabaseManager, logger: logging.Logger):
         """Initialize the alert manager.

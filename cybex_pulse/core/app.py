@@ -1,5 +1,11 @@
 """
 Main application module for Cybex Pulse.
+
+This module contains the main application class for Cybex Pulse, responsible for:
+- Initializing and coordinating all system components
+- Managing scanning and monitoring threads
+- Handling configuration updates
+- Providing application lifecycle management
 """
 import json
 import logging
@@ -7,7 +13,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 
 from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
@@ -81,6 +87,8 @@ class CybexPulseApp:
     
     def start_monitoring_threads(self) -> None:
         """Start all monitoring threads based on current configuration."""
+        self.logger.info("Starting monitoring threads based on configuration")
+        
         # Start internet health check if enabled
         if self.config.get("monitoring", "internet_health", {}).get("enabled", False):
             self.start_health_check()
@@ -221,27 +229,39 @@ class CybexPulseApp:
             
     def update_monitoring_state(self) -> None:
         """Update the state of all monitoring threads based on current configuration."""
-        # Check health check state
-        health_enabled = self.config.get("monitoring", "internet_health", {}).get("enabled", False)
-        if health_enabled and (not self.health_check_thread or not self.health_check_thread.is_alive()):
-            self.start_health_check()
-        elif not health_enabled and self.health_check_thread and self.health_check_thread.is_alive():
-            self.stop_health_check()
-            
-        # Check website monitoring state
-        websites_enabled = self.config.get("monitoring", "websites", {}).get("enabled", False)
-        if websites_enabled and (not self.website_monitoring_thread or not self.website_monitoring_thread.is_alive()):
-            self.start_website_monitoring()
-        elif not websites_enabled and self.website_monitoring_thread and self.website_monitoring_thread.is_alive():
-            self.stop_website_monitoring()
-            
-        # Check security scanning state
-        security_enabled = self.config.get("monitoring", "security", {}).get("enabled", False)
-        if security_enabled and (not self.security_scanning_thread or not self.security_scanning_thread.is_alive()):
-            self.start_security_scanning()
-        elif not security_enabled and self.security_scanning_thread and self.security_scanning_thread.is_alive():
-            self.stop_security_scanning()
-            
+        self.logger.info("Updating monitoring threads state based on current configuration")
+        
+        # Dictionary mapping feature names to their enable checks and start/stop methods
+        monitoring_features = {
+            "health_check": {
+                "enabled": self.config.get("monitoring", "internet_health", {}).get("enabled", False),
+                "thread": self.health_check_thread,
+                "start": self.start_health_check,
+                "stop": self.stop_health_check
+            },
+            "website_monitoring": {
+                "enabled": self.config.get("monitoring", "websites", {}).get("enabled", False),
+                "thread": self.website_monitoring_thread,
+                "start": self.start_website_monitoring,
+                "stop": self.stop_website_monitoring
+            },
+            "security_scanning": {
+                "enabled": self.config.get("monitoring", "security", {}).get("enabled", False),
+                "thread": self.security_scanning_thread,
+                "start": self.start_security_scanning,
+                "stop": self.stop_security_scanning
+            }
+        }
+        
+        # Update each monitoring feature based on configuration
+        for feature_name, feature in monitoring_features.items():
+            if feature["enabled"] and (not feature["thread"] or not feature["thread"].is_alive()):
+                self.logger.debug(f"Starting {feature_name} thread (was inactive but enabled in config)")
+                feature["start"]()
+            elif not feature["enabled"] and feature["thread"] and feature["thread"].is_alive():
+                self.logger.debug(f"Stopping {feature_name} thread (was active but disabled in config)")
+                feature["stop"]()
+        
         # Update fingerprinting state in network scanner
         self.update_fingerprinting_state()
     
@@ -357,22 +377,17 @@ class CybexPulseApp:
                 # Run speed test
                 self.logger.info("Running internet speed test")
                 
+                # Initialize speedtest with timeout settings
                 st = speedtest.Speedtest()
                 st.get_best_server()
                 
-                # Run download test
+                # Run tests and gather metrics
                 download_speed = st.download() / 1_000_000  # Convert to Mbps
-                
-                # Run upload test
                 upload_speed = st.upload() / 1_000_000  # Convert to Mbps
-                
-                # Get ping
                 ping = st.results.ping
                 
-                # Get ISP
+                # Get connection metadata
                 isp = st.results.client.get("isp", "Unknown")
-                
-                # Get server name
                 server_name = st.results.server.get("name", "Unknown")
                 
                 # Log results
@@ -381,26 +396,46 @@ class CybexPulseApp:
                 # Save to database
                 self.db_manager.add_speed_test(download_speed, upload_speed, ping, isp, server_name)
                 
-                # Check if latency exceeds threshold
-                latency_threshold = self.config.get("alerts", "latency_threshold")
-                if ping > latency_threshold:
-                    self.alert_manager.send_alert(
-                        "High Latency Detected",
-                        f"Network latency is high: {ping:.2f} ms (threshold: {latency_threshold} ms)"
-                    )
+                # Check for issues that require alerts
+                self._check_internet_health_alerts(download_speed, upload_speed, ping)
                 
-                # Sleep for the configured interval, but check stop event periodically
-                for _ in range(interval):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep until next interval, checking for stop events
+                self._sleep_with_check(interval, stop_event)
             except Exception as e:
                 self.logger.error(f"Error in internet health check: {e}")
-                # Sleep for a short time before retrying, but check stop event
-                for _ in range(60):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep for a short time before retrying
+                self._sleep_with_check(60, stop_event)
+    
+    def _check_internet_health_alerts(self, download_speed: float, upload_speed: float, ping: float) -> None:
+        """Check internet health metrics and send alerts if thresholds are exceeded.
+        
+        Args:
+            download_speed: Download speed in Mbps
+            upload_speed: Upload speed in Mbps
+            ping: Ping/latency in ms
+        """
+        # Check if latency exceeds threshold
+        latency_threshold = self.config.get("alerts", "latency_threshold")
+        if ping > latency_threshold:
+            self.alert_manager.send_alert(
+                "High Latency Detected",
+                f"Network latency is high: {ping:.2f} ms (threshold: {latency_threshold} ms)"
+            )
+        
+        # TODO: Add additional checks for download/upload speeds
+        # These could be implemented in a future version
+    
+    def _sleep_with_check(self, seconds: int, stop_event: threading.Event) -> None:
+        """Sleep for specified seconds while periodically checking stop event.
+        
+        Args:
+            seconds: Number of seconds to sleep
+            stop_event: Event to check for termination signal
+        """
+        for _ in range(seconds):
+            if stop_event.is_set() or self.stop_event.is_set():
+                break
+            time.sleep(1)
     
     def _run_website_monitoring(self, stop_event=None) -> None:
         """Run website monitoring in a loop.
@@ -432,70 +467,74 @@ class CybexPulseApp:
                 # Get websites to monitor
                 websites = self.config.get("monitoring", "websites", {}).get("urls", [])
                 
-                for url in websites:
-                    # Check if stop requested during processing
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                        
-                    try:
-                        # Ensure URL has a scheme
-                        if not url.startswith(('http://', 'https://')):
-                            url = 'https://' + url
-                            
-                        self.logger.debug(f"Checking website: {url}")
-                        
-                        # Send request with timeout
-                        start_time = time.time()
-                        response = requests.get(url, timeout=10)
-                        response_time = time.time() - start_time
-                        
-                        # Check if response is successful
-                        is_up = response.status_code < 400
-                        
-                        # Save to database
-                        self.db_manager.add_website_check(
-                            url, 
-                            status_code=response.status_code,
-                            response_time=response_time,
-                            is_up=is_up
-                        )
-                        
-                        # Send alert if website is down
-                        if not is_up and self.config.get("alerts", "website_error"):
-                            self.alert_manager.send_alert(
-                                "Website Error",
-                                f"Website {url} returned error status: {response.status_code}"
-                            )
-                    except requests.RequestException as e:
-                        # Website is unreachable
-                        self.logger.warning(f"Error checking website {url}: {e}")
-                        
-                        # Save error to database
-                        self.db_manager.add_website_check(
-                            url,
-                            is_up=False,
-                            error_message=str(e)
-                        )
-                        
-                        # Send alert
-                        if self.config.get("alerts", "website_error"):
-                            self.alert_manager.send_alert(
-                                "Website Unreachable",
-                                f"Website {url} is unreachable: {str(e)}"
-                            )
+                self._check_websites(websites, requests, stop_event)
                 
-                # Sleep for the configured interval, but check stop event periodically
-                for _ in range(interval):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep until next interval, checking for stop events
+                self._sleep_with_check(interval, stop_event)
             except Exception as e:
                 self.logger.error(f"Error in website monitoring: {e}")
-                # Sleep for a short time before retrying, but check stop event
-                for _ in range(60):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep for a short time before retrying
+                self._sleep_with_check(60, stop_event)
+    
+    def _check_websites(self, websites: List[str], requests_module: Any, stop_event: threading.Event) -> None:
+        """Check a list of websites and log/alert on issues.
+        
+        Args:
+            websites: List of website URLs to check
+            requests_module: Imported requests module
+            stop_event: Threading event to check for termination
+        """
+        for url in websites:
+            # Check if stop requested during processing
+            if stop_event.is_set() or self.stop_event.is_set():
+                break
+                
+            try:
+                # Ensure URL has a scheme
+                if not url.startswith(('http://', 'https://')):
+                    url = 'https://' + url
+                    
+                self.logger.debug(f"Checking website: {url}")
+                
+                # Send request with timeout
+                start_time = time.time()
+                response = requests_module.get(url, timeout=10, verify=False)
+                response_time = time.time() - start_time
+                
+                # Check if response is successful
+                is_up = response.status_code < 400
+                
+                # Save to database
+                self.db_manager.add_website_check(
+                    url, 
+                    status_code=response.status_code,
+                    response_time=response_time,
+                    is_up=is_up
+                )
+                
+                # Send alert if website is down
+                if not is_up and self.config.get("alerts", "website_error"):
+                    self.alert_manager.send_alert(
+                        "Website Error",
+                        f"Website {url} returned error status: {response.status_code}"
+                    )
+            except requests_module.RequestException as e:
+                # Website is unreachable
+                self.logger.warning(f"Error checking website {url}: {e}")
+                
+                # Save error to database
+                self.db_manager.add_website_check(
+                    url,
+                    is_up=False,
+                    error_message=str(e)
+                )
+                
+                # Send alert
+                if self.config.get("alerts", "website_error"):
+                    self.alert_manager.send_alert(
+                        "Website Unreachable",
+                        f"Website {url} is unreachable: {str(e)}"
+                    )
     
     def _run_security_scanning(self, stop_event=None) -> None:
         """Run security scanning in a loop.
@@ -524,59 +563,91 @@ class CybexPulseApp:
                 # Get all devices from database
                 devices = self.db_manager.get_all_devices()
                 
-                for device in devices:
-                    # Check if stop requested during processing
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                        
-                    try:
-                        ip_address = device["ip_address"]
-                        if not ip_address:
-                            continue
-                        
-                        self.logger.info(f"Running security scan for device: {ip_address}")
-                        
-                        # Initialize scanner
-                        nm = nmap.PortScanner()
-                        
-                        # Run scan
-                        nm.scan(ip_address, arguments="-F")  # Fast scan
-                        
-                        # Process results
-                        if ip_address in nm.all_hosts():
-                            open_ports = []
-                            for proto in nm[ip_address].all_protocols():
-                                ports = sorted(nm[ip_address][proto].keys())
-                                for port in ports:
-                                    state = nm[ip_address][proto][port]["state"]
-                                    if state == "open":
-                                        service = nm[ip_address][proto][port].get("name", "unknown")
-                                        open_ports.append({
-                                            "port": port,
-                                            "protocol": proto,
-                                            "service": service
-                                        })
-                            
-                            # Save to database
-                            self.db_manager.add_security_scan(
-                                device["id"],
-                                open_ports=json.dumps(open_ports)
-                            )
-                            
-                            # Log results
-                            self.logger.info(f"Security scan for {ip_address} found {len(open_ports)} open ports")
-                    except Exception as e:
-                        self.logger.error(f"Error scanning device {ip_address}: {e}")
+                # Scan all devices
+                self._scan_devices_security(devices, nmap, stop_event)
                 
-                # Sleep for the configured interval, but check stop event periodically
-                for _ in range(interval):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep until next interval, checking for stop events
+                self._sleep_with_check(interval, stop_event)
             except Exception as e:
                 self.logger.error(f"Error in security scanning: {e}")
-                # Sleep for a short time before retrying, but check stop event
-                for _ in range(60):
-                    if stop_event.is_set() or self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                # Sleep for a short time before retrying
+                self._sleep_with_check(60, stop_event)
+    
+    def _scan_devices_security(self, devices: List[Dict[str, Any]], nmap_module: Any, stop_event: threading.Event) -> None:
+        """Scan devices for security vulnerabilities.
+        
+        Args:
+            devices: List of device dictionaries from database
+            nmap_module: Imported nmap module
+            stop_event: Threading event to check for termination
+        """
+        for device in devices:
+            # Check if stop requested during processing
+            if stop_event.is_set() or self.stop_event.is_set():
+                break
+                
+            try:
+                ip_address = device["ip_address"]
+                if not ip_address:
+                    continue
+                
+                self.logger.info(f"Running security scan for device: {ip_address}")
+                
+                # Initialize scanner
+                nm = nmap_module.PortScanner()
+                
+                # Run scan with appropriate arguments
+                # -F: Fast mode - scan fewer ports than the default scan
+                nm.scan(ip_address, arguments="-F")
+                
+                # Process results
+                if ip_address in nm.all_hosts():
+                    open_ports = self._process_nmap_results(nm, ip_address)
+                    
+                    # Save to database
+                    self.db_manager.add_security_scan(
+                        device["id"],
+                        open_ports=json.dumps(open_ports)
+                    )
+                    
+                    # Log results and potentially alert on suspicious ports
+                    self._handle_security_scan_results(ip_address, open_ports, device)
+            except Exception as e:
+                self.logger.error(f"Error scanning device {ip_address}: {e}")
+    
+    def _process_nmap_results(self, nm: Any, ip_address: str) -> List[Dict[str, Any]]:
+        """Process nmap scan results for a device.
+        
+        Args:
+            nm: Nmap scanner object with results
+            ip_address: IP address of the scanned device
+            
+        Returns:
+            List of dictionaries containing open port information
+        """
+        open_ports = []
+        for proto in nm[ip_address].all_protocols():
+            ports = sorted(nm[ip_address][proto].keys())
+            for port in ports:
+                state = nm[ip_address][proto][port]["state"]
+                if state == "open":
+                    service = nm[ip_address][proto][port].get("name", "unknown")
+                    open_ports.append({
+                        "port": port,
+                        "protocol": proto,
+                        "service": service
+                    })
+        return open_ports
+    
+    def _handle_security_scan_results(self, ip_address: str, open_ports: List[Dict[str, Any]], device: Dict[str, Any]) -> None:
+        """Process and log security scan results, sending alerts if necessary.
+        
+        Args:
+            ip_address: IP address of the scanned device
+            open_ports: List of open ports found during scan
+            device: Device dictionary from database
+        """
+        self.logger.info(f"Security scan for {ip_address} found {len(open_ports)} open ports")
+        
+        # TODO: Add logic to detect suspicious ports and send alerts
+        # This could be implemented in a future version
