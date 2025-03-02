@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="120"/>
+  <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="250"/>
   
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
@@ -377,7 +377,6 @@ This project is licensed under the terms of the MIT license included in the repo
   <p>Made with ❤️ by <a href="https://cybex.net">Cybex</a></p>
   <p>
     <a href="https://cybex.net">Website</a> •
-    <a href="https://github.com/DigitalPals">GitHub</a> •
-    <a href="https://twitter.com/CybexSecurity">Twitter</a>
+    <a href="https://github.com/DigitalPals">GitHub</a>
   </p>
 </div>
