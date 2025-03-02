@@ -23,7 +23,6 @@ INFO_MARK="\033[0;34mℹ\033[0m"
 LOG_FILE="/tmp/cybex-pulse-install.log"
 REPO_URL="https://github.com/DigitalPals/pulse.git"
 REQUIREMENTS_FILE="cybex_pulse/requirements.txt"
-VENV_DIR="venv"
 
 # Initialize log file
 echo "Cybex Pulse Installation Log - $(date)" > $LOG_FILE
@@ -108,11 +107,11 @@ install_dependencies() {
             apt-get update -qq >> $LOG_FILE 2>&1
             
             log_info "Installing Python, Git, and core dependencies..."
-            apt-get install -y python3 python3-pip python3-venv python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+            apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
-            # Install Python packages from requirements.txt using apt when possible
+            # Install Python packages via apt
             log_info "Installing Python packages via apt..."
-            apt-get install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+            apt-get install -y python3-flask python3-requests python3-telegram-bot python3-nmap python3-speedtest-cli >> $LOG_FILE 2>&1 || true
             ;;
             
         redhat)
@@ -121,8 +120,8 @@ install_dependencies() {
                 dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 
                 # Install Python packages via dnf when available
-                log_info "Installing Python packages..."
-                dnf install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                log_info "Installing Python packages via dnf..."
+                dnf install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             else
                 # For RHEL/CentOS/Rocky
                 if ! rpm -q epel-release > /dev/null 2>&1; then
@@ -134,8 +133,8 @@ install_dependencies() {
                 yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 
                 # Install Python packages via yum when available
-                log_info "Installing Python packages..."
-                yum install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                log_info "Installing Python packages via yum..."
+                yum install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             fi
             ;;
             
@@ -147,8 +146,8 @@ install_dependencies() {
             pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
             # Install Python packages via pacman when available
-            log_info "Installing Python packages..."
-            pacman -S --noconfirm python-flask python-requests >> $LOG_FILE 2>&1 || true
+            log_info "Installing Python packages via pacman..."
+            pacman -S --noconfirm python-flask python-requests python-telegram-bot python-nmap >> $LOG_FILE 2>&1 || true
             ;;
             
         suse)
@@ -156,8 +155,8 @@ install_dependencies() {
             zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
             # Install Python packages via zypper when available
-            log_info "Installing Python packages..."
-            zypper --non-interactive install python3-Flask python3-requests >> $LOG_FILE 2>&1 || true
+            log_info "Installing Python packages via zypper..."
+            zypper --non-interactive install python3-Flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             ;;
             
         unknown)
@@ -165,26 +164,26 @@ install_dependencies() {
             if command -v apt-get > /dev/null; then
                 log_info "Using apt package manager..."
                 apt-get update -qq >> $LOG_FILE 2>&1
-                apt-get install -y python3 python3-pip python3-venv python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
-                apt-get install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+                apt-get install -y python3-flask python3-requests python3-telegram-bot python3-nmap python3-speedtest-cli >> $LOG_FILE 2>&1 || true
             elif command -v dnf > /dev/null; then
                 log_info "Using dnf package manager..."
                 dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
-                dnf install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                dnf install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             elif command -v yum > /dev/null; then
                 log_info "Using yum package manager..."
                 yum install -y epel-release >> $LOG_FILE 2>&1 || true
                 yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
-                yum install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                yum install -y python3-flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             elif command -v pacman > /dev/null; then
                 log_info "Using pacman package manager..."
                 pacman -Sy --noconfirm >> $LOG_FILE 2>&1
                 pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
-                pacman -S --noconfirm python-flask python-requests >> $LOG_FILE 2>&1 || true
+                pacman -S --noconfirm python-flask python-requests python-telegram-bot python-nmap >> $LOG_FILE 2>&1 || true
             elif command -v zypper > /dev/null; then
                 log_info "Using zypper package manager..."
                 zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
-                zypper --non-interactive install python3-Flask python3-requests >> $LOG_FILE 2>&1 || true
+                zypper --non-interactive install python3-Flask python3-requests python3-telegram-bot python3-nmap >> $LOG_FILE 2>&1 || true
             else
                 log_error "No supported package manager found." "fatal"
             fi
@@ -204,18 +203,66 @@ install_dependencies() {
         fi
     fi
 
+    log_success "Dependencies installed successfully"
+}
+
+# Install local user site packages if needed
+install_local_user_packages() {
+    log_info "Checking for missing Python packages..."
+    
     # Determine Python command
     PYTHON_CMD="python3"
     if ! command -v python3 &> /dev/null; then
         PYTHON_CMD="python"
     fi
-
-    # Verify pip is available
-    if ! $PYTHON_CMD -m pip --version &> /dev/null; then
-        log_error "Pip installation failed. Please install it manually." "fatal"
+    
+    # Create local user site directory if it doesn't exist
+    USER_SITE=$($PYTHON_CMD -m site --user-site)
+    mkdir -p "$USER_SITE" 2>/dev/null || true
+    
+    # Check if we have a missing package
+    MISSING_PACKAGES=false
+    
+    if ! $PYTHON_CMD -c "import flask" 2>/dev/null; then
+        MISSING_PACKAGES=true
     fi
     
-    log_success "Dependencies installed successfully"
+    if ! $PYTHON_CMD -c "import telegram" 2>/dev/null; then
+        MISSING_PACKAGES=true
+    fi
+    
+    if ! $PYTHON_CMD -c "import nmap" 2>/dev/null; then
+        MISSING_PACKAGES=true
+    fi
+    
+    if ! $PYTHON_CMD -c "import speedtest" 2>/dev/null; then
+        MISSING_PACKAGES=true
+    fi
+    
+    if ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
+        MISSING_PACKAGES=true
+    fi
+    
+    # If we have missing packages, install to user directory
+    if [ "$MISSING_PACKAGES" = true ]; then
+        log_info "Installing missing Python packages to user directory..."
+        
+        # Install basic packages to user site
+        $PYTHON_CMD -m pip install --user flask python-telegram-bot python-nmap speedtest-cli requests >> $LOG_FILE 2>&1 || {
+            log_warning "Could not install all packages to user directory. Will try a local directory instead."
+            
+            # If that fails, use a local lib directory
+            mkdir -p "$HOME/.local/lib/cybex-pulse" 2>/dev/null || true
+            $PYTHON_CMD -m pip install --target="$HOME/.local/lib/cybex-pulse" flask python-telegram-bot python-nmap speedtest-cli requests >> $LOG_FILE 2>&1 || {
+                log_error "Failed to install Python packages. Please install them manually." "fatal"
+            }
+            
+            # Add to PYTHONPATH
+            export PYTHONPATH="$HOME/.local/lib/cybex-pulse:$PYTHONPATH"
+        }
+    else
+        log_success "All required Python packages are already installed"
+    fi
 }
 
 # Clone repository or update if already exists
@@ -238,56 +285,6 @@ clone_repository() {
     fi
     
     log_success "Repository setup completed"
-    
-    # Ensure the requirements file exists
-    if [ ! -f "$CURRENT_DIR/pulse/$REQUIREMENTS_FILE" ]; then
-        log_error "Requirements file not found in the repository." "fatal"
-    fi
-}
-
-# Create and set up virtual environment
-setup_virtual_environment() {
-    log_info "Setting up Python virtual environment..."
-    
-    cd pulse
-    
-    # Determine Python command
-    PYTHON_CMD="python3"
-    if ! command -v python3 &> /dev/null; then
-        PYTHON_CMD="python"
-    fi
-    
-    # Create virtual environment
-    $PYTHON_CMD -m venv $VENV_DIR >> $LOG_FILE 2>&1
-    
-    # Check if virtual environment was created successfully
-    if [ ! -f "$VENV_DIR/bin/activate" ]; then
-        log_error "Failed to create virtual environment." "fatal"
-    fi
-    
-    log_success "Virtual environment created successfully"
-}
-
-# Install Python dependencies from requirements.txt
-install_python_requirements() {
-    log_info "Installing Python dependencies from requirements.txt..."
-    
-    # Activate virtual environment
-    source $VENV_DIR/bin/activate
-    
-    # Upgrade pip
-    pip install --upgrade pip >> $LOG_FILE 2>&1
-    
-    # Install requirements
-    pip install -r "$REQUIREMENTS_FILE" >> $LOG_FILE 2>&1
-    
-    # Install the package in development mode
-    pip install -e . >> $LOG_FILE 2>&1
-    
-    # Deactivate virtual environment
-    deactivate
-    
-    log_success "Python requirements installed"
 }
 
 # Create a wrapper script for running the application
@@ -297,19 +294,23 @@ create_wrapper_script() {
     # Get the full path
     INSTALL_DIR=$(pwd)
     
-    # Create the wrapper script
+    cd pulse
+    
+    # Create the wrapper script to handle PYTHONPATH
     cat > pulse << EOF
 #!/bin/bash
 # Wrapper script for Cybex Pulse
 
-# Activate virtual environment
-source "${INSTALL_DIR}/${VENV_DIR}/bin/activate"
+# Add local package path if needed
+if [ -d "\$HOME/.local/lib/cybex-pulse" ]; then
+    export PYTHONPATH="\$HOME/.local/lib/cybex-pulse:\$PYTHONPATH"
+fi
+
+# Add the current directory to the Python path
+export PYTHONPATH="$(pwd):\$PYTHONPATH"
 
 # Run the application
-python -m cybex_pulse "\$@"
-
-# Deactivate virtual environment (not reached if app keeps running)
-# deactivate
+exec python3 -m cybex_pulse "\$@"
 EOF
 
     # Make it executable
@@ -335,6 +336,7 @@ After=network.target
 Type=simple
 ExecStart=${INSTALL_DIR}/pulse
 WorkingDirectory=${INSTALL_DIR}
+Environment="PYTHONPATH=${INSTALL_DIR}:$HOME/.local/lib/cybex-pulse"
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -366,7 +368,7 @@ print_completion() {
     echo
     
     echo "Usage Instructions:"
-    echo "  - Run the application manually: cd $INSTALL_DIR && ./pulse"
+    echo "  - Run the application manually: $INSTALL_DIR/pulse"
     
     if [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
         echo "  - Start as a service: sudo systemctl start cybex-pulse"
@@ -397,19 +399,16 @@ main() {
     # Step 2: Install system dependencies
     install_dependencies
     
-    # Step 3: Clone repository
+    # Step 3: Install local packages if needed
+    install_local_user_packages
+    
+    # Step 4: Clone repository
     clone_repository
     
-    # Step 4: Create virtual environment
-    setup_virtual_environment
-    
-    # Step 5: Install Python requirements
-    install_python_requirements
-    
-    # Step 6: Create wrapper script
+    # Step 5: Create wrapper script
     create_wrapper_script
     
-    # Step 7: Create systemd service
+    # Step 6: Create systemd service
     create_service
     
     # Print completion message
