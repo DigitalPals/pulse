@@ -27,9 +27,11 @@ handle_error() {
     # Don't exit, just warn
 }
 
-# No colors or special characters as requested
-NC=''
-BOLD=''
+# Define colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+BOLD='\033[1m'
 
 # Configuration
 INSTALL_DIR="/opt/cybex-pulse"
@@ -83,12 +85,12 @@ progress() {
 }
 
 success() {
-    printf "[SUCCESS]\n"
+    printf "${GREEN}[SUCCESS]${NC}\n"
     echo "SUCCESS: $1" >> $LOG_FILE
 }
 
 error() {
-    printf "[FAILED]\n"
+    printf "${RED}[FAILED]${NC}\n"
     echo "ERROR: $1" >> $LOG_FILE
     echo
     if [ "$2" = "fatal" ]; then
@@ -133,11 +135,11 @@ install_package() {
     local result=$?
     
     if [ $result -eq 0 ]; then
-        echo "[SUCCESS]"
+        echo "${GREEN}[SUCCESS]${NC}"
         echo "SUCCESS: Installed $package" >> $LOG_FILE
         return 0
     else
-        echo "[FAILED]"
+        echo "${RED}[FAILED]${NC}"
         echo "FAILED: Could not install $package" >> $LOG_FILE
         return 1
     fi
@@ -294,8 +296,6 @@ install_dependencies() {
     
     if [ "$core_success" = false ]; then
         error "Some core packages failed to install. The application may not function correctly."
-    else
-        success "All core packages installed successfully"
     fi
     
     # Install optional packages
@@ -305,8 +305,6 @@ install_dependencies() {
     for pkg in "${optional_pkgs[@]}"; do
         install_package "$pkg" "$pkg_manager" || warning "Optional package $pkg could not be installed, but installation will continue"
     done
-    
-    success "System dependencies installed"
 }
 
 create_user() {
@@ -415,8 +413,6 @@ install_python_packages() {
     
     if [ "$py_core_success" = false ]; then
         error "Some core Python packages failed to install. The application may not function correctly."
-    else
-        success "All core Python packages installed successfully"
     fi
     
     # Install optional Python packages
@@ -449,8 +445,6 @@ install_python_packages() {
             warning "Failed to install some packages from requirements.txt, but installation will continue"
         fi
     fi
-    
-    success "Python dependencies installed"
 }
 
 copy_application() {
@@ -736,9 +730,6 @@ start_service() {
 }
 
 print_completion() {
-    # Clear screen for final display
-    clear
-    
     # Show logo again
     print_cybex_logo
     
