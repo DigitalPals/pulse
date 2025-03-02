@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="250"/>
+  <img src="https://uptime.cybex.net/img/logo/cybex-pulse.svg" alt="Cybex Pulse Logo" width="500"/>
   
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
@@ -26,7 +26,7 @@
 
 ```bash
 # One-line installation (Debian/Ubuntu)
-curl -sSL https://github.com/DigitalPals/pulse/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/DigitalPals/pulse/main/install.sh | sudo bash
 
 # Access the web interface
 # http://YOUR_IP_ADDRESS:8000
@@ -91,8 +91,8 @@ The quick installation method will automatically set up everything you need, inc
 
 ```bash
 # Clone the repository
-git clone https://github.com/cybex/Pulse.git
-cd Pulse
+git clone https://github.com/DigitalPals/pulse.git
+cd pulse
 
 # Run installation script with root privileges
 sudo ./install.sh
@@ -108,8 +108,8 @@ If you prefer to control each step of the installation process, follow these ins
 
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/cybex/Pulse.git
-cd Pulse
+git clone https://github.com/DigitalPals/pulse.git
+cd pulse
 ```
 
 #### 2. Set Up a Virtual Environment
