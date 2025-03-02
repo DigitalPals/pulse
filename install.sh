@@ -287,7 +287,7 @@ install_system_packages() {
             debian)
                 log_info "Installing Python packages via apt..."
                 # Try correct package names first
-                if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
+                if ! apt-get install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
                     log_warning "Could not install packages with standard names, trying alternative package names..."
                     # Fallback to alternative package names
                     apt-get install -y python3-flask python3-telegram-bot python3-nmap python3-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
@@ -425,7 +425,7 @@ install_system_packages() {
         if [ -n "$MISSING" ]; then
             log_error "Failed to install the following Python packages: ${MISSING}"
             log_error "Please install them manually using your system's package manager." 
-            log_error "For example, on Debian/Ubuntu: sudo apt-get install python3-flask python3-python-telegram-bot" 
+            log_error "For example, on Debian/Ubuntu: sudo apt-get install python3-flask python3-python-telegram-bot python3-python-speedtest-cli" 
             log_error "Check the log file for details: $LOG_FILE"
             if [ "$VERBOSE" = "true" ]; then
                 echo -e "\n${YELLOW}Package install log:${NC}"
