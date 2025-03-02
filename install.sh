@@ -693,40 +693,202 @@ install_system_packages() {
                         log_success "All Python packages installed successfully"
                     fi
                 elif command -v dnf > /dev/null; then
-                    # Try correct package names first for dnf
-                    if ! dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
-                        log_warning "Could not install packages with standard names, trying alternative package names..."
-                        dnf install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
-                            log_error "Failed to install Python packages via dnf. See log for details."
-                            cat $LOG_FILE | tail -n 20
-                            exit 1
-                        }
+                    # Install packages individually with fallbacks for Fedora/RHEL
+                    INSTALL_ERRORS=0
+                    
+                    # Function to install a RedHat/Fedora package with fallbacks
+                    install_pkg() {
+                        local primary_pkg="$1"
+                        local fallback_pkg="$2"
+                        local python_module="$3"
+                        
+                        # Check if module already installed in Python
+                        if $PYTHON_CMD -c "import $python_module" 2>/dev/null; then
+                            log_success "Module $python_module already available"
+                            return 0
+                        fi
+                        
+                        # Try primary package
+                        log_info "Installing $primary_pkg..."
+                        if $SUDO_CMD dnf install -y $primary_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $primary_pkg successfully"
+                            return 0
+                        fi
+                        
+                        # Try fallback package
+                        log_warning "Could not install $primary_pkg, trying $fallback_pkg..."
+                        if $SUDO_CMD dnf install -y $fallback_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $fallback_pkg successfully"
+                            return 0
+                        fi
+                        
+                        log_warning "Failed to install package for $python_module"
+                        INSTALL_ERRORS=$((INSTALL_ERRORS+1))
+                        return 1
+                    }
+                    
+                    # Install each package with appropriate fallbacks
+                    install_pkg "python3-flask" "python3-flask" "flask"
+                    install_pkg "python3-telegram-bot" "python3-python-telegram-bot" "telegram"
+                    install_pkg "python3-nmap" "python3-nmap" "nmap"
+                    install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
+                    install_pkg "python3-requests" "python3-requests" "requests"
+                    
+                    # Check if any packages failed to install
+                    if [ $INSTALL_ERRORS -gt 0 ]; then
+                        log_warning "$INSTALL_ERRORS package(s) failed to install. The application may have limited functionality."
+                        # Continue execution but warn the user
+                    else
+                        log_success "All Python packages installed successfully"
                     fi
                 elif command -v yum > /dev/null; then
-                    # Try correct package names first for yum
-                    if ! yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
-                        log_warning "Could not install packages with standard names, trying alternative package names..."
-                        yum install -y python3-flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
-                            log_error "Failed to install Python packages via yum. See log for details."
-                            cat $LOG_FILE | tail -n 20
-                            exit 1
-                        }
+                    # Install packages individually with fallbacks for RHEL/CentOS
+                    INSTALL_ERRORS=0
+                    
+                    # Function to install a RedHat/CentOS package with fallbacks
+                    install_pkg() {
+                        local primary_pkg="$1"
+                        local fallback_pkg="$2"
+                        local python_module="$3"
+                        
+                        # Check if module already installed in Python
+                        if $PYTHON_CMD -c "import $python_module" 2>/dev/null; then
+                            log_success "Module $python_module already available"
+                            return 0
+                        fi
+                        
+                        # Try primary package
+                        log_info "Installing $primary_pkg..."
+                        if $SUDO_CMD yum install -y $primary_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $primary_pkg successfully"
+                            return 0
+                        fi
+                        
+                        # Try fallback package
+                        log_warning "Could not install $primary_pkg, trying $fallback_pkg..."
+                        if $SUDO_CMD yum install -y $fallback_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $fallback_pkg successfully"
+                            return 0
+                        fi
+                        
+                        log_warning "Failed to install package for $python_module"
+                        INSTALL_ERRORS=$((INSTALL_ERRORS+1))
+                        return 1
+                    }
+                    
+                    # Install each package with appropriate fallbacks
+                    install_pkg "python3-flask" "python3-flask" "flask"
+                    install_pkg "python3-telegram-bot" "python3-python-telegram-bot" "telegram"
+                    install_pkg "python3-nmap" "python3-nmap" "nmap"
+                    install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
+                    install_pkg "python3-requests" "python3-requests" "requests"
+                    
+                    # Check if any packages failed to install
+                    if [ $INSTALL_ERRORS -gt 0 ]; then
+                        log_warning "$INSTALL_ERRORS package(s) failed to install. The application may have limited functionality."
+                        # Continue execution but warn the user
+                    else
+                        log_success "All Python packages installed successfully"
                     fi
                 elif command -v pacman > /dev/null; then
-                    pacman -S --noconfirm python-flask python-telegram-bot python-nmap python-speedtest-cli python-requests >> $LOG_FILE 2>&1 || {
-                        log_error "Failed to install Python packages via pacman. See log for details."
-                        cat $LOG_FILE | tail -n 20
-                        exit 1
+                    # Install packages individually with fallbacks for Arch
+                    INSTALL_ERRORS=0
+                    
+                    # Function to install an Arch package with fallbacks
+                    install_pkg() {
+                        local primary_pkg="$1"
+                        local fallback_pkg="$2"
+                        local python_module="$3"
+                        
+                        # Check if module already installed in Python
+                        if $PYTHON_CMD -c "import $python_module" 2>/dev/null; then
+                            log_success "Module $python_module already available"
+                            return 0
+                        fi
+                        
+                        # Try primary package
+                        log_info "Installing $primary_pkg..."
+                        if $SUDO_CMD pacman -S --noconfirm $primary_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $primary_pkg successfully"
+                            return 0
+                        fi
+                        
+                        # Try fallback package if different
+                        if [ "$primary_pkg" != "$fallback_pkg" ]; then
+                            log_warning "Could not install $primary_pkg, trying $fallback_pkg..."
+                            if $SUDO_CMD pacman -S --noconfirm $fallback_pkg >> $LOG_FILE 2>&1; then
+                                log_success "Installed $fallback_pkg successfully"
+                                return 0
+                            fi
+                        fi
+                        
+                        log_warning "Failed to install package for $python_module"
+                        INSTALL_ERRORS=$((INSTALL_ERRORS+1))
+                        return 1
                     }
+                    
+                    # Install each package with appropriate fallbacks
+                    install_pkg "python-flask" "python-flask" "flask"
+                    install_pkg "python-telegram-bot" "python-telegram-bot" "telegram"
+                    install_pkg "python-nmap" "python-nmap" "nmap"
+                    install_pkg "python-speedtest-cli" "speedtest-cli" "speedtest"
+                    install_pkg "python-requests" "python-requests" "requests"
+                    
+                    # Check if any packages failed to install
+                    if [ $INSTALL_ERRORS -gt 0 ]; then
+                        log_warning "$INSTALL_ERRORS package(s) failed to install. The application may have limited functionality."
+                        # Continue execution but warn the user
+                    else
+                        log_success "All Python packages installed successfully"
+                    fi
                 elif command -v zypper > /dev/null; then
-                    # Try correct package names first for zypper
-                    if ! zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1; then
-                        log_warning "Could not install packages with standard names, trying alternative package names..."
-                        zypper --non-interactive install python3-Flask python3-python-telegram-bot python3-nmap python3-python-speedtest-cli python3-requests >> $LOG_FILE 2>&1 || {
-                            log_error "Failed to install Python packages via zypper. See log for details."
-                            cat $LOG_FILE | tail -n 20
-                            exit 1
-                        }
+                    # Install packages individually with fallbacks for SUSE
+                    INSTALL_ERRORS=0
+                    
+                    # Function to install a SUSE package with fallbacks
+                    install_pkg() {
+                        local primary_pkg="$1"
+                        local fallback_pkg="$2"
+                        local python_module="$3"
+                        
+                        # Check if module already installed in Python
+                        if $PYTHON_CMD -c "import $python_module" 2>/dev/null; then
+                            log_success "Module $python_module already available"
+                            return 0
+                        fi
+                        
+                        # Try primary package
+                        log_info "Installing $primary_pkg..."
+                        if $SUDO_CMD zypper --non-interactive install $primary_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $primary_pkg successfully"
+                            return 0
+                        fi
+                        
+                        # Try fallback package
+                        log_warning "Could not install $primary_pkg, trying $fallback_pkg..."
+                        if $SUDO_CMD zypper --non-interactive install $fallback_pkg >> $LOG_FILE 2>&1; then
+                            log_success "Installed $fallback_pkg successfully"
+                            return 0
+                        fi
+                        
+                        log_warning "Failed to install package for $python_module"
+                        INSTALL_ERRORS=$((INSTALL_ERRORS+1))
+                        return 1
+                    }
+                    
+                    # Install each package with appropriate fallbacks
+                    install_pkg "python3-Flask" "python3-flask" "flask"
+                    install_pkg "python3-telegram-bot" "python3-python-telegram-bot" "telegram"
+                    install_pkg "python3-nmap" "python3-nmap" "nmap"
+                    install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
+                    install_pkg "python3-requests" "python3-requests" "requests"
+                    
+                    # Check if any packages failed to install
+                    if [ $INSTALL_ERRORS -gt 0 ]; then
+                        log_warning "$INSTALL_ERRORS package(s) failed to install. The application may have limited functionality."
+                        # Continue execution but warn the user
+                    else
+                        log_success "All Python packages installed successfully"
                     fi
                 else
                     log_error "No supported package manager found. Cannot install Python packages." "fatal"
