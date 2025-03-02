@@ -5,5 +5,55 @@
 # Use the installation directory from the install script
 INSTALL_DIR="/opt/cybex-pulse"
 
+# Create a dynamic wrapper module for direct execution if it doesn't exist
+if [ ! -f "$INSTALL_DIR/run_app.py" ]; then
+    cat > "$INSTALL_DIR/run_app.py" << EOF
+#!/usr/bin/env python3
+# Dynamic wrapper to execute the application directly
+import os
+import sys
+
+# Add the root directory to Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Create imports for all Python files in the current directory
+for root, dirs, files in os.walk(current_dir):
+    for filename in files:
+        if filename.endswith('.py') and filename != 'run_app.py':
+            module_name = os.path.splitext(filename)[0]
+            if module_name != '__init__':
+                try:
+                    exec(f"import {module_name}")
+                    print(f"Imported {module_name}")
+                except Exception as e:
+                    print(f"Failed to import {module_name}: {e}")
+
+# Try to import from different approaches
+try:
+    # Try to run directly from the module
+    from cybex_pulse.__main__ import main
+    print("Running from cybex_pulse.__main__")
+    main()
+except ImportError:
+    try:
+        # Try direct import of individual files
+        import __main__
+        print("Running from direct import")
+        __main__.main()
+    except (ImportError, AttributeError):
+        # Last resort - execute the main script directly
+        try:
+            print("Running from exec")
+            with open(os.path.join(current_dir, '__main__.py'), 'r') as f:
+                exec(f.read())
+        except Exception as e:
+            print(f"All execution methods failed: {e}")
+            sys.exit(1)
+EOF
+    chmod +x "$INSTALL_DIR/run_app.py"
+fi
+
 # Change to the Pulse directory, activate the virtual environment, and run the application
-cd $INSTALL_DIR && source venv/bin/activate && python -m cybex_pulse "$@"
+cd $INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && python "$INSTALL_DIR/run_app.py" "$@"
