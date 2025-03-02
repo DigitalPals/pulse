@@ -8,27 +8,27 @@
 # Exit on errors
 set -e
 
-# Configuration
-LOG_FILE="/tmp/cybex-pulse-install.log"
-REPO_URL="https://github.com/DigitalPals/pulse.git"
-INSTALL_DIR="/usr/local/lib/cybex-pulse"
-
-# Define colors and symbols for output
+# Colors and formatting
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;36m'
-NC='\033[0m'    # No Color
 BOLD='\033[1m'
+NC='\033[0m'    # No Color
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 INFO_MARK="\033[0;34mℹ\033[0m"
+
+# Configuration
+LOG_FILE="/tmp/cybex-pulse-install.log"
+REPO_URL="https://github.com/DigitalPals/pulse.git"
+REQUIREMENTS_FILE="cybex_pulse/requirements.txt"
 
 # Initialize log file
 echo "Cybex Pulse Installation Log - $(date)" > $LOG_FILE
 echo "===============================================" >> $LOG_FILE
 
-# Function to output messages
+# Logging functions
 log_info() {
     echo -e "${INFO_MARK} ${BLUE}$1${NC}"
     echo "[INFO] $1" >> $LOG_FILE
@@ -52,7 +52,7 @@ log_warning() {
     echo "[WARNING] $1" >> $LOG_FILE
 }
 
-# Detect Linux distribution
+# Function to detect Linux distribution
 detect_distribution() {
     log_info "Detecting Linux distribution..."
     
@@ -68,7 +68,7 @@ detect_distribution() {
         DISTRO=$DISTRIB_ID
         VERSION=$DISTRIB_RELEASE
     else
-        log_error "Could not detect Linux distribution" "fatal"
+        log_error "Could not detect Linux distribution." "fatal"
     fi
 
     DISTRO=$(echo $DISTRO | tr '[:upper:]' '[:lower:]')
@@ -96,78 +96,62 @@ detect_distribution() {
     log_success "Detected distribution: $DISTRO ($DISTRO_FAMILY family)"
 }
 
-# Install system dependencies based on distribution
+# Install dependencies using native package managers
 install_dependencies() {
     log_info "Installing system dependencies..."
     
-    # Determine package manager and packages based on distribution
+    # Determine package manager and install base packages
     case $DISTRO_FAMILY in
         debian)
             log_info "Updating apt repositories..."
             apt-get update -qq >> $LOG_FILE 2>&1
             
-            log_info "Installing Python and dependencies..."
-            apt-get install -y python3 python3-pip git curl wget >> $LOG_FILE 2>&1
+            log_info "Installing Python, Git, and core dependencies..."
+            apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
-            # Install Python packages via apt
+            # Install Python packages from requirements.txt using apt when possible
             log_info "Installing Python packages via apt..."
-            apt-get install -y python3-flask python3-requests python3-telegram-bot >> $LOG_FILE 2>&1 || true
+            apt-get install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
             
-            # Install packages that might not be in the repositories
+            # For packages that might not be in the repositories, use pip
             log_info "Installing additional Python packages via pip..."
-            pip3 install python-nmap speedtest-cli >> $LOG_FILE 2>&1
-            
-            # Optional packages
-            log_info "Installing optional packages..."
-            apt-get install -y nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+            python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             ;;
             
         redhat)
             if [ "$DISTRO" = "fedora" ]; then
-                log_info "Installing Python and dependencies..."
-                dnf install -y python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+                log_info "Installing Python, Git, and core dependencies..."
+                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 
                 # Install Python packages via dnf when available
                 log_info "Installing Python packages..."
                 dnf install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
-                
-                # Install additional packages via pip
-                log_info "Installing additional Python packages via pip..."
-                pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             else
                 # For RHEL/CentOS/Rocky
-                log_info "Installing EPEL repository..."
                 if ! rpm -q epel-release > /dev/null 2>&1; then
+                    log_info "Installing EPEL repository..."
                     yum install -y epel-release >> $LOG_FILE 2>&1
                 fi
                 
-                log_info "Installing Python and dependencies..."
-                yum install -y python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+                log_info "Installing Python, Git, and core dependencies..."
+                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 
                 # Install Python packages via yum when available
                 log_info "Installing Python packages..."
                 yum install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
-                
-                # Install additional packages via pip
-                log_info "Installing additional Python packages via pip..."
-                pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             fi
             
-            # Optional packages
-            log_info "Installing optional packages..."
-            if [ "$DISTRO" = "fedora" ]; then
-                dnf install -y nmap net-tools iproute >> $LOG_FILE 2>&1 || true
-            else
-                yum install -y nmap net-tools iproute >> $LOG_FILE 2>&1 || true
-            fi
+            # Install additional packages via pip
+            log_info "Installing additional Python packages via pip..."
+            python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             ;;
             
         arch)
             log_info "Updating pacman repositories..."
             pacman -Sy --noconfirm >> $LOG_FILE 2>&1
             
-            log_info "Installing Python and dependencies..."
-            pacman -S --noconfirm python python-pip git curl wget >> $LOG_FILE 2>&1
+            log_info "Installing Python, Git, and core dependencies..."
+            pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
             # Install Python packages via pacman when available
             log_info "Installing Python packages..."
@@ -175,16 +159,12 @@ install_dependencies() {
             
             # Install additional packages via pip
             log_info "Installing additional Python packages via pip..."
-            pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-            
-            # Optional packages
-            log_info "Installing optional packages..."
-            pacman -S --noconfirm nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+            python -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             ;;
             
         suse)
-            log_info "Installing Python and dependencies..."
-            zypper --non-interactive install python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+            log_info "Installing Python, Git, and core dependencies..."
+            zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
             
             # Install Python packages via zypper when available
             log_info "Installing Python packages..."
@@ -192,11 +172,7 @@ install_dependencies() {
             
             # Install additional packages via pip
             log_info "Installing additional Python packages via pip..."
-            pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-            
-            # Optional packages
-            log_info "Installing optional packages..."
-            zypper --non-interactive install nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+            python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             ;;
             
         unknown)
@@ -204,44 +180,59 @@ install_dependencies() {
             if command -v apt-get > /dev/null; then
                 log_info "Using apt package manager..."
                 apt-get update -qq >> $LOG_FILE 2>&1
-                apt-get install -y -qq python3 python3-pip git curl wget >> $LOG_FILE 2>&1
-                apt-get install -y -qq python3-flask python3-requests python3-telegram-bot >> $LOG_FILE 2>&1 || true
-                pip3 install python-nmap speedtest-cli >> $LOG_FILE 2>&1
-                apt-get install -y -qq nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+                apt-get install -y python3 python3-pip python3-dev git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
+                apt-get install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
+                python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             elif command -v dnf > /dev/null; then
                 log_info "Using dnf package manager..."
-                dnf install -y python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+                dnf install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 dnf install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
-                pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-                dnf install -y nmap net-tools iproute >> $LOG_FILE 2>&1 || true
+                python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             elif command -v yum > /dev/null; then
                 log_info "Using yum package manager..."
-                yum install -y python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+                yum install -y epel-release >> $LOG_FILE 2>&1 || true
+                yum install -y python3 python3-pip python3-devel git curl wget nmap net-tools iproute sudo >> $LOG_FILE 2>&1
                 yum install -y python3-flask python3-requests >> $LOG_FILE 2>&1 || true
-                pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-                yum install -y nmap net-tools iproute >> $LOG_FILE 2>&1 || true
+                python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             elif command -v pacman > /dev/null; then
                 log_info "Using pacman package manager..."
                 pacman -Sy --noconfirm >> $LOG_FILE 2>&1
-                pacman -S --noconfirm python python-pip git curl wget >> $LOG_FILE 2>&1
+                pacman -S --noconfirm python python-pip git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
                 pacman -S --noconfirm python-flask python-requests >> $LOG_FILE 2>&1 || true
-                pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-                pacman -S --noconfirm nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+                python -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             elif command -v zypper > /dev/null; then
                 log_info "Using zypper package manager..."
-                zypper --non-interactive install python3 python3-pip python3-devel gcc git curl wget >> $LOG_FILE 2>&1
+                zypper --non-interactive install python3 python3-pip python3-devel git curl wget nmap net-tools iproute2 sudo >> $LOG_FILE 2>&1
                 zypper --non-interactive install python3-Flask python3-requests >> $LOG_FILE 2>&1 || true
-                pip3 install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
-                zypper --non-interactive install nmap net-tools iproute2 >> $LOG_FILE 2>&1 || true
+                python3 -m pip install python-telegram-bot python-nmap speedtest-cli >> $LOG_FILE 2>&1
             else
-                log_error "No supported package manager found" "fatal"
+                log_error "No supported package manager found." "fatal"
             fi
             ;;
     esac
     
     # Verify Python is installed correctly
     if ! command -v python3 &> /dev/null; then
-        log_error "Python 3 installation failed. Please install it manually." "fatal"
+        if command -v python &> /dev/null; then
+            log_info "Using 'python' instead of 'python3'"
+            # Create symlink if needed
+            if [ "$DISTRO_FAMILY" = "arch" ]; then
+                ln -sf $(which python) /usr/local/bin/python3 2>/dev/null || true
+            fi
+        else
+            log_error "Python 3 installation failed. Please install it manually." "fatal"
+        fi
+    fi
+
+    # Check Python version
+    PYTHON_CMD="python3"
+    if ! command -v python3 &> /dev/null; then
+        PYTHON_CMD="python"
+    fi
+
+    # Verify pip is available
+    if ! $PYTHON_CMD -m pip --version &> /dev/null; then
+        log_error "Pip installation failed. Please install it manually." "fatal"
     fi
     
     log_success "Dependencies installed successfully"
@@ -251,80 +242,66 @@ install_dependencies() {
 clone_repository() {
     log_info "Setting up repository..."
     
-    # Check if repository already exists
-    if [ -d "./pulse" ]; then
+    # Get the current directory
+    CURRENT_DIR=$(pwd)
+    
+    # Check if repository already exists in the current directory
+    if [ -d "$CURRENT_DIR/pulse/.git" ]; then
         log_info "Repository already exists, updating..."
-        cd pulse
-        git pull >> $LOG_FILE 2>&1
-        cd ..
+        cd "$CURRENT_DIR/pulse"
+        git pull >> $LOG_FILE 2>&1 || log_warning "Could not update the repository. Continuing with existing files."
+        cd "$CURRENT_DIR"
     else
-        # Clone the repository
+        # Clone the repository into the current directory
         log_info "Cloning the repository..."
-        git clone $REPO_URL >> $LOG_FILE 2>&1
-        if [ $? -ne 0 ]; then
-            log_error "Failed to clone repository. Check your internet connection." "fatal"
-        fi
+        git clone "$REPO_URL" pulse >> $LOG_FILE 2>&1 || log_error "Failed to clone repository. Check your internet connection." "fatal"
     fi
     
     log_success "Repository setup completed"
+    
+    # Ensure the requirements file exists
+    if [ ! -f "$CURRENT_DIR/pulse/$REQUIREMENTS_FILE" ]; then
+        log_error "Requirements file not found in the repository." "fatal"
+    fi
 }
 
-# Install the application to system directories
-install_application() {
-    log_info "Installing application to system directories..."
+# Install Python dependencies from requirements.txt
+install_python_requirements() {
+    log_info "Installing Python dependencies from requirements.txt..."
     
-    # Create installation directory
-    mkdir -p $INSTALL_DIR
+    # Check which Python command to use
+    PYTHON_CMD="python3"
+    if ! command -v python3 &> /dev/null; then
+        PYTHON_CMD="python"
+    fi
     
-    # Copy files from repository
-    log_info "Copying files to installation directory..."
-    cp -r pulse/cybex_pulse/* $INSTALL_DIR/
+    # Install requirements
+    cd pulse
+    $PYTHON_CMD -m pip install -r "$REQUIREMENTS_FILE" >> $LOG_FILE 2>&1
     
-    # Create necessary directories
-    mkdir -p /etc/cybex-pulse /var/log/cybex-pulse
+    # Install the package in development mode
+    $PYTHON_CMD -m pip install -e . >> $LOG_FILE 2>&1
     
-    # Set proper permissions
-    chmod -R 755 $INSTALL_DIR
-    chmod 775 /var/log/cybex-pulse
-    
-    log_success "Application installed to system directories"
+    log_success "Python requirements installed"
 }
 
-# Create a launcher script
-create_launcher() {
-    log_info "Creating launcher script..."
-    
-    # Create a launcher script in /usr/local/bin
-    cat > /usr/local/bin/cybex-pulse << EOF
-#!/bin/bash
-# Launcher script for Cybex Pulse
-
-# Set Python path to include our directory
-export PYTHONPATH="$INSTALL_DIR:\$PYTHONPATH"
-
-# Run the application
-python3 -m cybex_pulse "\$@"
-EOF
-
-    # Make it executable
-    chmod +x /usr/local/bin/cybex-pulse
-    
-    log_success "Launcher script created"
-}
-
-# Create a simple systemd service
+# Create a systemd service file
 create_service() {
     log_info "Creating systemd service..."
     
+    # Get the current directory for the service file
+    INSTALL_DIR=$(pwd)
+    
     # Create systemd service file
-    cat > /etc/systemd/system/cybex-pulse.service << EOF
+    cat > /tmp/cybex-pulse.service << EOF
 [Unit]
 Description=Cybex Pulse Network Monitoring
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cybex-pulse
+ExecStart=${INSTALL_DIR}/pulse
+WorkingDirectory=${INSTALL_DIR}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -334,28 +311,39 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-    # Reload systemd
-    systemctl daemon-reload
-
-    log_success "Systemd service created"
+    # Move to systemd directory
+    if [ -d "/etc/systemd/system" ]; then
+        mv /tmp/cybex-pulse.service /etc/systemd/system/
+        systemctl daemon-reload
+        log_success "Systemd service created successfully"
+    else
+        log_warning "Could not create systemd service: directory not found"
+    fi
 }
 
 # Display completion message
 print_completion() {
+    INSTALL_DIR=$(pwd)
+    
     echo -e "\n${GREEN}${BOLD}Cybex Pulse Installation Completed!${NC}\n"
     
     echo "Installation Details:"
-    echo "  - Repository: $(pwd)/pulse"
-    echo "  - Installation Directory: $INSTALL_DIR"
+    echo "  - Repository: $INSTALL_DIR/pulse"
     echo "  - Log File: $LOG_FILE"
     echo
     
     echo "Usage Instructions:"
-    echo "  - Run the application with: cybex-pulse"
-    echo "  - Start as a service: sudo systemctl start cybex-pulse"
-    echo "  - Enable at boot: sudo systemctl enable cybex-pulse"
-    echo
+    echo "  - Run the application manually: cd $INSTALL_DIR/pulse && ./pulse"
     
+    if [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
+        echo "  - Start as a service: sudo systemctl start cybex-pulse"
+        echo "  - Enable at boot: sudo systemctl enable cybex-pulse"
+        echo "  - Check service status: sudo systemctl status cybex-pulse"
+    fi
+    
+    echo
+    echo "After starting, access the web interface at http://YOUR_IP_ADDRESS:8000"
+    echo
     echo "For issues or more information, visit: https://github.com/DigitalPals/pulse"
     echo
 }
@@ -373,19 +361,16 @@ main() {
     # Step 1: Detect distribution
     detect_distribution
     
-    # Step 2: Install dependencies
+    # Step 2: Install system dependencies
     install_dependencies
     
     # Step 3: Clone repository
     clone_repository
     
-    # Step 4: Install application
-    install_application
+    # Step 4: Install Python requirements
+    install_python_requirements
     
-    # Step 5: Create launcher script
-    create_launcher
-    
-    # Step 6: Create systemd service
+    # Step 5: Create systemd service
     create_service
     
     # Print completion message
