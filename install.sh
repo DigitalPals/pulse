@@ -296,6 +296,8 @@ install_dependencies() {
     
     if [ "$core_success" = false ]; then
         error "Some core packages failed to install. The application may not function correctly."
+    else
+        success "Core packages installed"
     fi
     
     # Install optional packages
@@ -305,6 +307,8 @@ install_dependencies() {
     for pkg in "${optional_pkgs[@]}"; do
         install_package "$pkg" "$pkg_manager" || warning "Optional package $pkg could not be installed, but installation will continue"
     done
+    
+    success "Optional packages installation completed"
 }
 
 create_user() {
@@ -344,7 +348,7 @@ install_python_packages() {
     echo "Setting up Python environment..." >> $LOG_FILE
     
     # Create and activate Python virtual environment
-    echo -ne "${CYAN}Creating Python virtual environment...${NC} "
+    echo -ne "Creating Python virtual environment... "
     echo "Creating Python virtual environment..." >> $LOG_FILE
     
     if python3 -m venv $INSTALL_DIR/venv >> $LOG_FILE 2>&1; then
@@ -354,7 +358,7 @@ install_python_packages() {
         error "Failed to create virtual environment (see $LOG_FILE for details)"
         
         # Try alternate approach if venv module fails
-        echo -ne "${CYAN}Trying alternate approach with virtualenv...${NC} "
+        echo -ne "Trying alternate approach with virtualenv... "
         echo "Trying alternate approach with virtualenv..." >> $LOG_FILE
         
         # First try to install virtualenv if it's not already available
@@ -375,7 +379,7 @@ install_python_packages() {
     fi
     
     # Use the full path to pip to ensure we're using the venv
-    echo -ne "${CYAN}Upgrading pip...${NC} "
+    echo -ne "Upgrading pip... "
     echo "Upgrading pip..." >> $LOG_FILE
     
     if $INSTALL_DIR/venv/bin/pip install --upgrade pip >> $LOG_FILE 2>&1; then
@@ -398,7 +402,7 @@ install_python_packages() {
     # Install core Python packages
     local py_core_success=true
     for pkg in "${python_core_pkgs[@]}"; do
-        echo -ne "  ${CYAN}Installing ${pkg}...${NC} "
+        echo -ne "  Installing ${pkg}... "
         echo "Installing Python package: $pkg" >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
@@ -418,7 +422,7 @@ install_python_packages() {
     # Install optional Python packages
     echo -e "\n${BOLD}Installing optional Python packages:${NC}"
     for pkg in "${python_optional_pkgs[@]}"; do
-        echo -ne "  ${CYAN}Installing ${pkg}...${NC} "
+        echo -ne "  Installing ${pkg}... "
         echo "Installing optional Python package: $pkg" >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install $pkg >> $LOG_FILE 2>&1; then
@@ -433,7 +437,7 @@ install_python_packages() {
     
     # Check if requirements.txt exists (when we have the repository)
     if [ -f "$INSTALL_DIR/requirements.txt" ]; then
-        echo -ne "${CYAN}Installing packages from requirements.txt...${NC} "
+        echo -ne "Installing packages from requirements.txt... "
         echo "Installing requirements from requirements.txt..." >> $LOG_FILE
         
         if $INSTALL_DIR/venv/bin/pip install -r $INSTALL_DIR/requirements.txt >> $LOG_FILE 2>&1; then
@@ -460,10 +464,24 @@ copy_application() {
         # We have the repository locally
         echo "Found local repository, copying files..." | tee -a $LOG_FILE
         
-        echo -ne "${CYAN}Copying application files from local directory...${NC} "
+        echo -ne "Copying application files from local directory... "
         if cp -r $CURRENT_DIR/cybex_pulse/* $INSTALL_DIR/ >> $LOG_FILE 2>&1; then
             echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Copied application files from local directory" >> $LOG_FILE
+            
+            # Install Python package for proper module import
+            echo -ne "Installing Python package... "
+            echo "Installing Python package..." >> $LOG_FILE
+            cd $INSTALL_DIR
+            if $INSTALL_DIR/venv/bin/pip install -e . >> $LOG_FILE 2>&1; then
+                echo -e "${GREEN}[SUCCESS]${NC}"
+                echo "SUCCESS: Installed Python package" >> $LOG_FILE
+            else
+                echo -e "${RED}[FAILED]${NC}"
+                echo "FAILED: Could not install Python package" >> $LOG_FILE
+                warning "Failed to install Python package, but installation will continue"
+            fi
+            cd $CURRENT_DIR
         else
             echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not copy application files from local directory" >> $LOG_FILE
@@ -471,7 +489,7 @@ copy_application() {
         fi
         
         # Copy pulse executable script to bin
-        echo -ne "${CYAN}Installing executables...${NC} "
+        echo -ne "Installing executables... "
         mkdir -p /usr/local/bin
         if cp $CURRENT_DIR/pulse /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1 && chmod +x /usr/local/bin/cybex-pulse >> $LOG_FILE 2>&1; then
             echo -e "${GREEN}[SUCCESS]${NC}"
@@ -484,14 +502,14 @@ copy_application() {
     else
         # We need to download the repository
         progress "Downloading repository from GitHub"
-        echo -e "${CYAN}No local repository found, downloading from GitHub...${NC}" | tee -a $LOG_FILE
+        echo "No local repository found, downloading from GitHub..." | tee -a $LOG_FILE
         
         TEMP_DIR=$(mktemp -d)
         echo "Created temporary directory: $TEMP_DIR" >> $LOG_FILE
         
         # Check if git is installed
         if ! command -v git > /dev/null; then
-            echo -ne "${CYAN}Installing git...${NC} "
+            echo -ne "Installing git... "
             echo "Git not found, installing..." >> $LOG_FILE
             
             # Install git based on distribution
@@ -535,7 +553,7 @@ copy_application() {
                 echo "FAILED: Could not install git" >> $LOG_FILE
                 
                 # Try alternate download method if git fails
-                echo -ne "${CYAN}Trying alternate download method with curl...${NC} "
+                echo -ne "Trying alternate download method with curl... "
                 echo "Trying alternate download method with curl..." >> $LOG_FILE
                 
                 if command -v curl > /dev/null; then
@@ -545,7 +563,14 @@ copy_application() {
                        tar -xzf pulse.tar.gz >> $LOG_FILE 2>&1; then
                         echo -e "${GREEN}[SUCCESS]${NC}"
                         echo "SUCCESS: Downloaded repository using curl" >> $LOG_FILE
-                        mv pulse-main/* .
+                        # Make sure we have the correct directory structure
+                        if [ -d "pulse-main/cybex_pulse" ]; then
+                            mv pulse-main/* .
+                        else
+                            echo "Unexpected directory structure, trying to find cybex_pulse directory..." >> $LOG_FILE
+                            mkdir -p cybex_pulse
+                            find pulse-main -type f -name "*.py" -exec cp {} cybex_pulse/ \; >> $LOG_FILE 2>&1
+                        fi
                     else
                         echo -e "${RED}[FAILED]${NC}"
                         echo "FAILED: Could not download repository using curl" >> $LOG_FILE
@@ -560,7 +585,7 @@ copy_application() {
         fi
         
         # Clone repository
-        echo -ne "${CYAN}Cloning repository...${NC} "
+        echo -ne "Cloning repository... "
         echo "Cloning repository from GitHub..." >> $LOG_FILE
         
         if git clone https://github.com/DigitalPals/pulse.git $TEMP_DIR/pulse >> $LOG_FILE 2>&1; then
@@ -572,7 +597,7 @@ copy_application() {
             echo "FAILED: Could not clone repository" >> $LOG_FILE
             
             # Try alternate download method if git clone fails
-            echo -ne "${CYAN}Trying alternate download method...${NC} "
+            echo -ne "Trying alternate download method... "
             echo "Trying alternate download method..." >> $LOG_FILE
             
             cd $TEMP_DIR
@@ -580,7 +605,22 @@ copy_application() {
                tar -xzf pulse.tar.gz >> $LOG_FILE 2>&1; then
                 echo -e "${GREEN}[SUCCESS]${NC}"
                 echo "SUCCESS: Downloaded repository using curl" >> $LOG_FILE
-                cd pulse-main
+                # Make sure we have the correct directory structure
+                if [ -d "pulse-main/cybex_pulse" ]; then
+                    cd pulse-main
+                else 
+                    echo "Unexpected directory structure, trying to fix..." >> $LOG_FILE
+                    # Try to find cybex_pulse directory
+                    CYBEX_DIR=$(find pulse-main -type d -name "cybex_pulse" | head -1)
+                    if [ -n "$CYBEX_DIR" ]; then
+                        cd $(dirname "$CYBEX_DIR")
+                    else
+                        # If not found, create it and copy python files
+                        mkdir -p pulse-main/cybex_pulse
+                        find pulse-main -type f -name "*.py" -exec cp {} pulse-main/cybex_pulse/ \; >> $LOG_FILE 2>&1
+                        cd pulse-main
+                    fi
+                fi
             else
                 echo -e "${RED}[FAILED]${NC}"
                 echo "FAILED: Could not download repository using alternate method" >> $LOG_FILE
@@ -590,12 +630,25 @@ copy_application() {
         fi
         
         # Copy files
-        echo -ne "${CYAN}Copying application files...${NC} "
+        echo -ne "Copying application files... "
         echo "Copying application files to installation directory..." >> $LOG_FILE
         
         if cp -r cybex_pulse/* $INSTALL_DIR/ >> $LOG_FILE 2>&1; then
             echo -e "${GREEN}[SUCCESS]${NC}"
             echo "SUCCESS: Copied application files" >> $LOG_FILE
+            
+            # Install Python package for proper module import
+            echo -ne "Installing Python package... "
+            echo "Installing Python package..." >> $LOG_FILE
+            cd $INSTALL_DIR
+            if $INSTALL_DIR/venv/bin/pip install -e . >> $LOG_FILE 2>&1; then
+                echo -e "${GREEN}[SUCCESS]${NC}"
+                echo "SUCCESS: Installed Python package" >> $LOG_FILE
+            else
+                echo -e "${RED}[FAILED]${NC}"
+                echo "FAILED: Could not install Python package" >> $LOG_FILE
+                warning "Failed to install Python package, but installation will continue"
+            fi
         else
             echo -e "${RED}[FAILED]${NC}"
             echo "FAILED: Could not copy application files" >> $LOG_FILE
@@ -603,7 +656,7 @@ copy_application() {
         fi
         
         # Copy pulse executable
-        echo -ne "${CYAN}Installing executables...${NC} "
+        echo -ne "Installing executables... "
         echo "Installing executables..." >> $LOG_FILE
         
         mkdir -p /usr/local/bin
@@ -615,7 +668,7 @@ copy_application() {
             echo "FAILED: Could not install executable" >> $LOG_FILE
             
             # Create a basic executable if the original is not available
-            echo -ne "${CYAN}Creating basic executable...${NC} "
+            echo -ne "Creating basic executable... "
             echo "Creating basic executable..." >> $LOG_FILE
             
             cat > /usr/local/bin/cybex-pulse << EOF
@@ -637,7 +690,7 @@ EOF
         fi
         
         # Clean up
-        echo -ne "${CYAN}Cleaning up temporary files...${NC} "
+        echo -ne "Cleaning up temporary files... "
         echo "Cleaning up temporary files..." >> $LOG_FILE
         
         if cd / && rm -rf $TEMP_DIR >> $LOG_FILE 2>&1; then
@@ -653,7 +706,7 @@ EOF
     fi
     
     # Create symlink to the venv-python executable
-    echo -ne "${CYAN}Creating Python symlink...${NC} "
+    echo -ne "Creating Python symlink... "
     echo "Creating Python symlink..." >> $LOG_FILE
     
     if ln -sf $INSTALL_DIR/venv/bin/python /usr/local/bin/cybex-pulse-python >> $LOG_FILE 2>&1; then
@@ -689,6 +742,7 @@ StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=cybex-pulse
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=$INSTALL_DIR
 
 [Install]
 WantedBy=multi-user.target
