@@ -247,12 +247,30 @@ class UpdateChecker:
                 if progress_callback:
                     progress_callback(fetch_result.stdout)
             
+            # Force update by resetting any local changes
+            if progress_callback:
+                progress_callback("Resetting local changes to ensure clean update...")
+                
+            reset_result = subprocess.run(
+                ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if reset_result.stdout:
+                if progress_callback:
+                    progress_callback(reset_result.stdout)
+            if reset_result.stderr:
+                if progress_callback:
+                    progress_callback(reset_result.stderr, is_error=True)
+            
             # Run git pull to update
             if progress_callback:
                 progress_callback("Pulling latest changes...")
                 
             result = subprocess.run(
-                ['git', '-C', repo_dir, 'pull'],
+                ['git', '-C', repo_dir, 'pull', '--force'],
                 capture_output=True,
                 text=True,
                 timeout=60

@@ -3,18 +3,18 @@
 {% block title %}System Update{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container-fluid">
     <div class="row">
         <div class="col-12">
             <h1>System Update</h1>
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Update Progress</h5>
-                    <span id="update-status" class="badge badge-primary">Connecting...</span>
+                    <span id="update-status" class="badge badge-primary">Ready</span>
                 </div>
                 <div class="card-body">
                     <div id="update-console" class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace;">
-                        <div class="text-muted">Connecting to update stream...</div>
+                        <div class="text-muted">Welcome to the update system. To begin the update process, please click the "Start Update" button below. This will download and install the latest version of the software.</div>
                     </div>
                 </div>
                 <div class="card-footer">
@@ -74,7 +74,10 @@
         document.getElementById('update-status').textContent = 'Starting';
         document.getElementById('update-status').className = 'badge badge-warning';
 
-        // Call the update API
+        // Call the update API without any confirmation prompt
+        appendToConsole('Initiating update process...', false);
+        appendToConsole('This will reset any local changes and pull the latest version.', false);
+        
         fetch('/perform-update')
             .then(response => response.json())
             .then(data => {
@@ -100,21 +103,51 @@
         // Close any existing connection
         if (updateEventSource) {
             updateEventSource.close();
+            updateEventSource = null;
         }
 
-        // Connect to the SSE endpoint
-        updateEventSource = new EventSource('/update-stream');
-        
-        // Handle messages
-        updateEventSource.addEventListener('message', function(event) {
-            const data = JSON.parse(event.data);
-            appendToConsole(data.message, data.is_error);
-        });
+        // Connect to the SSE endpoint with retry
+        try {
+            updateEventSource = new EventSource('/update-stream');
+            
+            // Handle connection open
+            updateEventSource.onopen = function() {
+                document.getElementById('update-status').textContent = 'Connected';
+                document.getElementById('update-status').className = 'badge badge-info';
+                appendToConsole("Connected to update stream", false);
+            };
+            
+            // Handle messages
+            updateEventSource.addEventListener('message', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    appendToConsole(data.message, data.is_error);
+                } catch (e) {
+                    appendToConsole("Error parsing message: " + e.message, true);
+                }
+            });
+        } catch (e) {
+            appendToConsole("Failed to connect to update stream: " + e.message, true);
+            document.getElementById('update-status').textContent = 'Connection Failed';
+            document.getElementById('update-status').className = 'badge badge-danger';
+            document.getElementById('update-btn').disabled = false;
+        }
 
         // Handle errors
         updateEventSource.addEventListener('error', function(event) {
-            const data = JSON.parse(event.data);
-            appendToConsole(data.message, true);
+            try {
+                // Only try to parse data if it exists
+                if (event.data) {
+                    const data = JSON.parse(event.data);
+                    appendToConsole(data.message, true);
+                } else {
+                    // Handle case where event.data is undefined
+                    appendToConsole("Error receiving update data from server", true);
+                }
+            } catch (e) {
+                // Handle JSON parsing errors
+                appendToConsole("Error processing update data: " + e.message, true);
+            }
         });
 
         // Handle completion
@@ -133,11 +166,24 @@
         });
 
         // Handle connection errors
-        updateEventSource.onerror = function() {
-            appendToConsole('Connection to update stream lost. The system may be restarting...', true);
-            document.getElementById('update-status').textContent = 'Disconnected';
-            document.getElementById('update-status').className = 'badge badge-secondary';
+        updateEventSource.onerror = function(event) {
+            // Check if the connection was never established
+            if (updateEventSource.readyState === 0) {
+                appendToConsole('Failed to connect to update stream. Please try again.', true);
+                document.getElementById('update-status').textContent = 'Connection Failed';
+                document.getElementById('update-status').className = 'badge badge-danger';
+                document.getElementById('update-btn').disabled = false;
+            }
+            // Check if the connection was lost after being established
+            else if (updateEventSource.readyState === 2) {
+                appendToConsole('Connection to update stream lost. The system may be restarting...', true);
+                document.getElementById('update-status').textContent = 'Disconnected';
+                document.getElementById('update-status').className = 'badge badge-secondary';
+            }
+            
+            // Close the connection
             updateEventSource.close();
+            updateEventSource = null;
         };
     }
 

@@ -3,6 +3,7 @@ Update routes for the web interface.
 """
 import queue
 import threading
+import time
 from functools import wraps
 
 def register_update_routes(app, server):
@@ -55,10 +56,17 @@ def register_update_routes(app, server):
         if not server.main_app:
             return server.jsonify({"error": "Main application not available"}), 500
             
+        # Check if update is already in progress
+        if update_in_progress.is_set():
+            return server.jsonify({"error": "Update already in progress"}), 409
+            
         # Clear any existing messages and set update in progress
         while not update_messages.empty():
             update_messages.get()
         update_in_progress.set()
+        
+        # Add initial message to the queue
+        add_update_message("Update process started")
         
         # Start update in a separate thread to not block the response
         def run_update():
@@ -68,11 +76,23 @@ def register_update_routes(app, server):
                 
                 if not success:
                     add_update_message(f"Update failed: {message}", is_error=True)
+                else:
+                    add_update_message("Update completed successfully")
+                
+                # Wait a moment to ensure messages are processed
+                time.sleep(1)
                 
                 # Clear update in progress flag when done
                 update_in_progress.clear()
             except Exception as e:
-                add_update_message(f"Error during update: {str(e)}", is_error=True)
+                error_message = f"Error during update: {str(e)}"
+                server.logger.error(error_message)
+                add_update_message(error_message, is_error=True)
+                
+                # Wait a moment to ensure messages are processed
+                time.sleep(1)
+                
+                # Clear update in progress flag when done
                 update_in_progress.clear()
         
         # Start update thread
@@ -94,32 +114,38 @@ def register_update_routes(app, server):
         
         def generate():
             """Generate SSE events."""
-            # Send initial message
-            yield "event: message\ndata: {\"message\": \"Connecting to update stream...\"}\n\n"
-            
-            # Check if update is in progress
-            if not update_in_progress.is_set():
-                yield "event: message\ndata: {\"message\": \"No update in progress\", \"is_error\": true}\n\n"
-                return
-            
-            # Send messages from queue
-            while update_in_progress.is_set() or not update_messages.empty():
-                try:
-                    # Try to get a message with timeout
-                    message = update_messages.get(timeout=1.0)
-                    
-                    # Format as SSE event
-                    if message.get("is_error", False):
-                        yield f"event: error\ndata: {server.json.dumps(message)}\n\n"
-                    else:
-                        yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
-                    
-                except queue.Empty:
-                    # Send heartbeat to keep connection alive
-                    yield ": heartbeat\n\n"
-            
-            # Send completion message
-            yield "event: complete\ndata: {\"message\": \"Update process completed\"}\n\n"
+            try:
+                # Send initial message
+                yield "event: message\ndata: {\"message\": \"Welcome to the update system. To begin the update process, please click the \\\"Start Update\\\" button below.\"}\n\n"
+                
+                # Check if update is in progress
+                if not update_in_progress.is_set():
+                    # Don't show an error, just wait for user to start the update
+                    return
+                
+                # Send messages from queue
+                while update_in_progress.is_set() or not update_messages.empty():
+                    try:
+                        # Try to get a message with timeout
+                        message = update_messages.get(timeout=1.0)
+                        
+                        # Format as SSE event
+                        if message.get("is_error", False):
+                            yield f"event: error\ndata: {server.json.dumps(message)}\n\n"
+                        else:
+                            yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
+                        
+                    except queue.Empty:
+                        # Send heartbeat to keep connection alive
+                        yield ": heartbeat\n\n"
+                
+                # Send completion message
+                yield "event: complete\ndata: {\"message\": \"Update process completed\"}\n\n"
+            except Exception as e:
+                # Log the error
+                server.logger.error(f"Error in update stream: {str(e)}")
+                # Send error to client
+                yield f"event: error\ndata: {{\"message\": \"Server error: {str(e)}\", \"is_error\": true}}\n\n"
         
         return server.Response(
             server.stream_with_context(generate()),
