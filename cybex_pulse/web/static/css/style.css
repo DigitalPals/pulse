@@ -82,6 +82,9 @@ body {
 
 .sidebar-nav {
     padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 100px); /* Adjust based on sidebar-header height */
 }
 
 .sidebar-nav ul {
