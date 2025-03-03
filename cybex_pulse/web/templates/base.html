@@ -211,7 +211,27 @@
                                     updateLink.innerHTML = '<i class="fas fa-ban"></i> Updates Disabled';
                                     alert('Updates are disabled for non-git installations.');
                                 } else {
-                                    alert('Your system is up to date.');
+                                    if (confirm('Your system is up to date. Would you like to check for updates now?')) {
+                                        // Re-fetch to check for updates again
+                                        fetch('/check-update')
+                                            .then(response => response.json())
+                                            .then(data => {
+                                                if (data.update_available) {
+                                                    updateLink.classList.remove('up-to-date');
+                                                    updateLink.innerHTML = '<i class="fas fa-arrow-circle-up"></i> Update Available';
+                                                    
+                                                    if (confirm('A new version of Pulse is available. Do you want to view the update page?')) {
+                                                        window.location.href = '/update-page';
+                                                    }
+                                                } else {
+                                                    alert('No updates available. Your system is up to date.');
+                                                }
+                                            })
+                                            .catch(error => {
+                                                console.error('Error:', error);
+                                                alert('Failed to check for updates: ' + error);
+                                            });
+                                    }
                                 }
                             })
                             .catch(error => {
