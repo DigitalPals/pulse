@@ -388,7 +388,8 @@ install_system_packages() {
        ! $PYTHON_CMD -c "import telegram" 2>/dev/null || \
        ! $PYTHON_CMD -c "import nmap" 2>/dev/null || \
        ! $PYTHON_CMD -c "import speedtest" 2>/dev/null || \
-       ! $PYTHON_CMD -c "import requests" 2>/dev/null; then
+       ! $PYTHON_CMD -c "import requests" 2>/dev/null || \
+       ! $PYTHON_CMD -c "import psutil" 2>/dev/null; then
         MISSING_PACKAGES=true
     fi
     
@@ -1231,7 +1232,7 @@ verify_installation() {
     echo "Checking core Python packages..." >> $LOG_FILE
     
     local MISSING_PKGS=""
-    for pkg in flask telegram nmap requests; do
+    for pkg in flask telegram nmap requests psutil; do
         if ! $PYTHON_CMD -c "import $pkg" &>/dev/null; then
             MISSING_PKGS="$MISSING_PKGS $pkg"
         else
