@@ -149,6 +149,7 @@ body {
 .copyright-container {
     padding: 15px 0;
     border-top: 1px solid var(--border-color);
+    margin-top: 20px;
     margin-bottom: 10px;
     text-align: center;
 }
