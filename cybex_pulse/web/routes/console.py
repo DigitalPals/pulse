@@ -8,7 +8,7 @@ import logging
 import sys
 import io
 from functools import wraps
-from cybex_pulse.utils.system_info import get_all_system_info
+from cybex_pulse.utils.system_info import get_all_system_info, get_cpu_info, get_memory_info
 
 class ConsoleStreamHandler(logging.Handler):
     """Custom logging handler that puts logs into a queue for streaming."""
