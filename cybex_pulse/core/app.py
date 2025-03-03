@@ -404,31 +404,61 @@ class CybexPulseApp:
                     import json
                     import subprocess
                     
-                    try:
-                        # Run speedtest-cli with JSON output
-                        result = subprocess.run(
-                            ['speedtest-cli', '--json'],
-                            check=True,
-                            capture_output=True,
-                            text=True,
-                            timeout=60
-                        )
-                        
-                        # Parse JSON output
-                        data = json.loads(result.stdout)
-                        
-                        # Extract metrics
-                        download_speed = data['download'] / 1_000_000  # Convert to Mbps
-                        upload_speed = data['upload'] / 1_000_000  # Convert to Mbps
-                        ping = data['ping']
-                        
-                        # Get connection metadata
-                        isp = data.get('client', {}).get('isp', 'Unknown')
-                        server_name = data.get('server', {}).get('name', 'Unknown')
-                    except (subprocess.SubprocessError, json.JSONDecodeError) as e:
-                        self.logger.error(f"Error running speedtest-cli: {e}")
-                        self._sleep_with_check(60, stop_event)
-                        continue
+                    max_retries = 3
+                    retry_count = 0
+                    success = False
+                    
+                    while retry_count < max_retries and not success:
+                        try:
+                            # Run speedtest-cli with JSON output and additional options
+                            self.logger.info(f"Running speedtest-cli (attempt {retry_count + 1}/{max_retries})")
+                            result = subprocess.run(
+                                ['speedtest-cli', '--json', '--secure'],  # Added --secure to use HTTPS
+                                check=False,  # Don't raise exception on non-zero exit
+                                capture_output=True,
+                                text=True,
+                                timeout=120  # Increased timeout
+                            )
+                            
+                            # Check if command was successful
+                            if result.returncode != 0:
+                                raise subprocess.SubprocessError(f"Command returned non-zero exit status {result.returncode}. stderr: {result.stderr}")
+                            
+                            # Parse JSON output
+                            data = json.loads(result.stdout)
+                            
+                            # Extract metrics
+                            download_speed = data['download'] / 1_000_000  # Convert to Mbps
+                            upload_speed = data['upload'] / 1_000_000  # Convert to Mbps
+                            ping = data['ping']
+                            
+                            # Get connection metadata
+                            isp = data.get('client', {}).get('isp', 'Unknown')
+                            server_name = data.get('server', {}).get('name', 'Unknown')
+                            
+                            success = True
+                            
+                        except (subprocess.SubprocessError, json.JSONDecodeError, ValueError) as e:
+                            retry_count += 1
+                            self.logger.warning(f"Error running speedtest-cli (attempt {retry_count}/{max_retries}): {e}")
+                            
+                            if retry_count < max_retries:
+                                # Wait before retrying
+                                self.logger.info(f"Waiting 30 seconds before retry...")
+                                self._sleep_with_check(30, stop_event)
+                            else:
+                                self.logger.error(f"Failed to run speedtest-cli after {max_retries} attempts. Last error: {e}")
+                                # Record a failed speed test in the database
+                                self.db_manager.add_speed_test(
+                                    download_speed=None,
+                                    upload_speed=None,
+                                    ping=None,
+                                    isp="Unknown",
+                                    server_name="Unknown",
+                                    error=str(e)
+                                )
+                                self._sleep_with_check(60, stop_event)
+                                continue
                 else:
                     # Use the Python module
                     import speedtest

@@ -10,6 +10,7 @@ from cybex_pulse.web.routes.setup import register_setup_routes
 from cybex_pulse.web.routes.auth import register_auth_routes
 from cybex_pulse.web.routes.internet import register_internet_routes
 from cybex_pulse.web.routes.updates import register_update_routes
+from cybex_pulse.web.routes.console import register_console_routes
 
 __all__ = [
     "register_routes"
@@ -31,6 +32,7 @@ def register_routes(app, server):
     register_auth_routes(app, server)
     register_internet_routes(app, server)
     register_update_routes(app, server)
+    register_console_routes(app, server)
     
     # Register error handlers
     @app.errorhandler(404)

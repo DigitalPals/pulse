@@ -32,21 +32,23 @@
                 <th>Ping (ms)</th>
                 <th>ISP</th>
                 <th>Server</th>
+                <th>Status</th>
             </tr>
         </thead>
         <tbody id="speed-tests-table">
             {% for test in tests %}
-            <tr>
+            <tr {% if test.error %}class="error-row"{% endif %}>
                 <td>{{ test.timestamp|timestamp_to_time }}</td>
-                <td>{{ test.download_speed|round(2) }}</td>
-                <td>{{ test.upload_speed|round(2) }}</td>
-                <td>{{ test.ping|round(2) }}</td>
+                <td>{% if test.download_speed is not none %}{{ test.download_speed|round(2) }}{% else %}--{% endif %}</td>
+                <td>{% if test.upload_speed is not none %}{{ test.upload_speed|round(2) }}{% else %}--{% endif %}</td>
+                <td>{% if test.ping is not none %}{{ test.ping|round(2) }}{% else %}--{% endif %}</td>
                 <td>{{ test.isp }}</td>
                 <td>{{ test.server_name }}</td>
+                <td>{% if test.error %}<span class="error-badge" title="{{ test.error }}">Failed</span>{% else %}<span class="success-badge">Success</span>{% endif %}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="6">No speed tests recorded yet</td>
+                <td colspan="7">No speed tests recorded yet</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -119,6 +121,27 @@
         font-weight: bold;
         color: var(--text);
     }
+    
+    .error-row {
+        background-color: rgba(243, 139, 168, 0.1); /* Light red background for error rows */
+    }
+    
+    .error-badge {
+        background-color: #f38ba8; /* Catppuccin red */
+        color: #1e1e2e;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: help;
+    }
+    
+    .success-badge {
+        background-color: #a6e3a1; /* Catppuccin green */
+        color: #1e1e2e;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
 </style>
 
 <script>
@@ -143,7 +166,7 @@
         type: 'line',
         data: {
             labels: [
-                {% for test in tests %}
+                {% for test in tests if not test.error and test.download_speed is not none and test.upload_speed is not none and test.ping is not none %}
                 '{{ test.timestamp|timestamp_to_time }}',
                 {% endfor %}
             ],
@@ -151,7 +174,7 @@
                 {
                     label: 'Download (Mbps)',
                     data: [
-                        {% for test in tests %}
+                        {% for test in tests if not test.error and test.download_speed is not none and test.upload_speed is not none and test.ping is not none %}
                         {{ test.download_speed }},
                         {% endfor %}
                     ],
@@ -162,7 +185,7 @@
                 {
                     label: 'Upload (Mbps)',
                     data: [
-                        {% for test in tests %}
+                        {% for test in tests if not test.error and test.download_speed is not none and test.upload_speed is not none and test.ping is not none %}
                         {{ test.upload_speed }},
                         {% endfor %}
                     ],
@@ -173,7 +196,7 @@
                 {
                     label: 'Ping (ms)',
                     data: [
-                        {% for test in tests %}
+                        {% for test in tests if not test.error and test.download_speed is not none and test.upload_speed is not none and test.ping is not none %}
                         {{ test.ping }},
                         {% endfor %}
                     ],
@@ -226,25 +249,50 @@
                     const testsTable = document.getElementById('speed-tests-table');
                     let html = '';
                     tests.forEach(test => {
+                        // Format values safely, handling null values
+                        const downloadSpeed = test.download_speed !== null ? test.download_speed.toFixed(2) : '--';
+                        const uploadSpeed = test.upload_speed !== null ? test.upload_speed.toFixed(2) : '--';
+                        const ping = test.ping !== null ? test.ping.toFixed(2) : '--';
+                        
+                        // Add error class if test failed
+                        const rowClass = test.error ? 'class="error-row"' : '';
+                        
+                        // Create status badge
+                        let statusBadge = '';
+                        if (test.error) {
+                            statusBadge = `<span class="error-badge" title="${test.error}">Failed</span>`;
+                        } else {
+                            statusBadge = '<span class="success-badge">Success</span>';
+                        }
+                        
                         html += `
-                            <tr>
+                            <tr ${rowClass}>
                                 <td>${formatTimestamp(test.timestamp)}</td>
-                                <td>${test.download_speed.toFixed(2)}</td>
-                                <td>${test.upload_speed.toFixed(2)}</td>
-                                <td>${test.ping.toFixed(2)}</td>
+                                <td>${downloadSpeed}</td>
+                                <td>${uploadSpeed}</td>
+                                <td>${ping}</td>
                                 <td>${test.isp || ''}</td>
                                 <td>${test.server_name || ''}</td>
+                                <td>${statusBadge}</td>
                             </tr>
                         `;
                     });
                     testsTable.innerHTML = html;
                     
-                    // Update chart
-                    speedChart.data.labels = tests.map(test => formatTimestamp(test.timestamp));
-                    speedChart.data.datasets[0].data = tests.map(test => test.download_speed);
-                    speedChart.data.datasets[1].data = tests.map(test => test.upload_speed);
-                    speedChart.data.datasets[2].data = tests.map(test => test.ping);
-                    speedChart.update();
+                    // Filter out failed tests for the chart
+                    const validTests = tests.filter(test => !test.error &&
+                                                  test.download_speed !== null &&
+                                                  test.upload_speed !== null &&
+                                                  test.ping !== null);
+                    
+                    // Update chart only with valid tests
+                    if (validTests.length > 0) {
+                        speedChart.data.labels = validTests.map(test => formatTimestamp(test.timestamp));
+                        speedChart.data.datasets[0].data = validTests.map(test => test.download_speed);
+                        speedChart.data.datasets[1].data = validTests.map(test => test.upload_speed);
+                        speedChart.data.datasets[2].data = validTests.map(test => test.ping);
+                        speedChart.update();
+                    }
                     
                     // Update last updated time
                     updateLastUpdated();

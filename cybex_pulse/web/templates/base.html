@@ -70,6 +70,12 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="{% if request.path == url_for('console_page') %}active{% endif %}">
+                        <a href="{{ url_for('console_page') }}">
+                            <i class="fas fa-terminal"></i>
+                            Console
+                        </a>
+                    </li>
                     <li class="{% if request.path == url_for('settings') %}active{% endif %}">
                         <a href="{{ url_for('settings') }}">
                             <i class="fas fa-cog"></i>

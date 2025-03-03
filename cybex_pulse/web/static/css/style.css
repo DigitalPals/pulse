@@ -2352,6 +2352,12 @@ td.message-column {
     line-height: 1;
 }
 
+.stat-detail {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
 /* Special styling for stat-value with status badges */
 .stat-value .status-badge-online,
 .stat-value .status-badge-offline,

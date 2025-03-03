@@ -31,9 +31,15 @@ def register_internet_routes(app, server):
         min_ping = 0
         
         if tests:
-            download_speeds = [test['download_speed'] for test in tests if test['download_speed']]
-            upload_speeds = [test['upload_speed'] for test in tests if test['upload_speed']]
-            pings = [test['ping'] for test in tests if test['ping']]
+            # Filter out failed tests for statistics
+            valid_tests = [test for test in tests if not test.get('error') and
+                          test['download_speed'] is not None and
+                          test['upload_speed'] is not None and
+                          test['ping'] is not None]
+            
+            download_speeds = [test['download_speed'] for test in valid_tests]
+            upload_speeds = [test['upload_speed'] for test in valid_tests]
+            pings = [test['ping'] for test in valid_tests]
             
             if download_speeds:
                 avg_download = sum(download_speeds) / len(download_speeds)

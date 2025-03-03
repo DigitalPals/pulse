@@ -439,6 +439,7 @@ install_system_packages() {
                 install_pkg "python3-nmap" "python3-nmap" "nmap"
                 install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                 install_pkg "python3-requests" "python3-requests" "requests"
+                install_pkg "python3-psutil" "python3-psutil" "psutil"
                 
                 # Check if any packages failed to install
                 if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -492,6 +493,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -542,6 +544,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -597,6 +600,7 @@ install_system_packages() {
                 install_pkg "python-nmap" "python-nmap" "nmap"
                 install_pkg "python-speedtest-cli" "speedtest-cli" "speedtest"
                 install_pkg "python-requests" "python-requests" "requests"
+                install_pkg "python-psutil" "python-psutil" "psutil"
                 
                 # Check if any packages failed to install
                 if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -649,6 +653,7 @@ install_system_packages() {
                 install_pkg "python3-nmap" "python3-nmap" "nmap"
                 install_pkg "python3-speedtest-cli" "speedtest-cli" "speedtest"
                 install_pkg "python3-requests" "python3-requests" "requests"
+                install_pkg "python3-psutil" "python3-psutil" "psutil"
                 
                 # Check if any packages failed to install
                 if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -703,6 +708,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -752,6 +758,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -801,6 +808,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -852,6 +860,7 @@ install_system_packages() {
                     install_pkg "python-nmap" "python-nmap" "nmap"
                     install_pkg "python-speedtest-cli" "speedtest-cli" "speedtest"
                     install_pkg "python-requests" "python-requests" "requests"
+                    install_pkg "python-psutil" "python-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then
@@ -901,6 +910,7 @@ install_system_packages() {
                     install_pkg "python3-nmap" "python3-nmap" "nmap"
                     install_pkg "speedtest-cli" "python3-speedtest-cli" "speedtest"
                     install_pkg "python3-requests" "python3-requests" "requests"
+                    install_pkg "python3-psutil" "python3-psutil" "psutil"
                     
                     # Check if any packages failed to install
                     if [ $INSTALL_ERRORS -gt 0 ]; then

@@ -82,7 +82,8 @@ class DatabaseManager:
             upload_speed REAL,
             ping REAL,
             isp TEXT,
-            server_name TEXT
+            server_name TEXT,
+            error TEXT
         )
         ''')
         
@@ -111,39 +112,48 @@ class DatabaseManager:
         )
         ''')
         
-        # Check for missing columns and add them if needed
+        # Check for missing columns in devices table and add them if needed
         cursor.execute("PRAGMA table_info(devices)")
-        existing_columns = [column[1] for column in cursor.fetchall()]
+        existing_device_columns = [column[1] for column in cursor.fetchall()]
         
         # Add device_type column if it doesn't exist
-        if 'device_type' not in existing_columns:
+        if 'device_type' not in existing_device_columns:
             logger.info("Adding missing device_type column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN device_type TEXT")
             
         # Add device_model column if it doesn't exist
-        if 'device_model' not in existing_columns:
+        if 'device_model' not in existing_device_columns:
             logger.info("Adding missing device_model column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN device_model TEXT")
             
         # Add device_manufacturer column if it doesn't exist
-        if 'device_manufacturer' not in existing_columns:
+        if 'device_manufacturer' not in existing_device_columns:
             logger.info("Adding missing device_manufacturer column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN device_manufacturer TEXT")
             
         # Add fingerprint_confidence column if it doesn't exist
-        if 'fingerprint_confidence' not in existing_columns:
+        if 'fingerprint_confidence' not in existing_device_columns:
             logger.info("Adding missing fingerprint_confidence column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN fingerprint_confidence REAL")
             
         # Add fingerprint_date column if it doesn't exist
-        if 'fingerprint_date' not in existing_columns:
+        if 'fingerprint_date' not in existing_device_columns:
             logger.info("Adding missing fingerprint_date column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN fingerprint_date INTEGER")
             
         # Add never_fingerprint column if it doesn't exist
-        if 'never_fingerprint' not in existing_columns:
+        if 'never_fingerprint' not in existing_device_columns:
             logger.info("Adding missing never_fingerprint column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN never_fingerprint BOOLEAN DEFAULT 0")
+            
+        # Check for missing columns in speed_tests table and add them if needed
+        cursor.execute("PRAGMA table_info(speed_tests)")
+        existing_speed_test_columns = [column[1] for column in cursor.fetchall()]
+        
+        # Add error column to speed_tests if it doesn't exist
+        if 'error' not in existing_speed_test_columns:
+            logger.info("Adding missing error column to speed_tests table")
+            cursor.execute("ALTER TABLE speed_tests ADD COLUMN error TEXT")
             
         conn.commit()
         logger.info("Database initialized successfully")
@@ -509,17 +519,18 @@ class DatabaseManager:
         return [dict(row) for row in cursor.fetchall()]
     
     # Speed test methods
-    
-    def add_speed_test(self, download_speed: float, upload_speed: float, 
-                      ping: float, isp: str = "", server_name: str = "") -> int:
+    def add_speed_test(self, download_speed: Optional[float] = None, upload_speed: Optional[float] = None,
+                       ping: Optional[float] = None, isp: str = "", server_name: str = "",
+                       error: Optional[str] = None) -> int:
         """Add a new speed test result to the database.
         
         Args:
-            download_speed: Download speed in Mbps
-            upload_speed: Upload speed in Mbps
-            ping: Ping latency in ms
+            download_speed: Download speed in Mbps (None if test failed)
+            upload_speed: Upload speed in Mbps (None if test failed)
+            ping: Ping latency in ms (None if test failed)
             isp: Internet Service Provider name
             server_name: Speed test server name
+            error: Error message if the test failed
             
         Returns:
             int: ID of the newly added speed test
@@ -530,14 +541,23 @@ class DatabaseManager:
         current_time = int(time.time())
         
         cursor.execute('''
-        INSERT INTO speed_tests (timestamp, download_speed, upload_speed, ping, isp, server_name)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (current_time, download_speed, upload_speed, ping, isp, server_name))
+        INSERT INTO speed_tests (timestamp, download_speed, upload_speed, ping, isp, server_name, error)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (current_time, download_speed, upload_speed, ping, isp, server_name, error))
         
         conn.commit()
         test_id = cursor.lastrowid
         
-        logger.info(f"Added speed test result: {download_speed:.2f}/{upload_speed:.2f} Mbps, {ping:.2f} ms")
+        if error:
+            logger.warning(f"Added failed speed test result: {error}")
+        else:
+            # Only log speeds if they're not None
+            download_str = f"{download_speed:.2f}" if download_speed is not None else "N/A"
+            upload_str = f"{upload_speed:.2f}" if upload_speed is not None else "N/A"
+            ping_str = f"{ping:.2f}" if ping is not None else "N/A"
+            logger.info(f"Added speed test result: {download_str}/{upload_str} Mbps, {ping_str} ms")
+            
+        return test_id
         return test_id
     
     def get_recent_speed_tests(self, limit: int = 100) -> List[Dict[str, Any]]:
