@@ -146,12 +146,8 @@ def create_pre_push_hook():
 echo "Ensuring version is up to date before push..."
 # Get the root directory of the Git repository
 REPO_ROOT=$(git rev-parse --show-toplevel)
-# Check if there are uncommitted changes to the VERSION file
-if git diff --name-only | grep -q "VERSION"; then
-    echo "Error: There are uncommitted changes to the VERSION file."
-    echo "Please commit these changes before pushing."
-    exit 1
-fi
+# We no longer check for uncommitted changes to the VERSION file
+# This allows pushing even if the VERSION file has been updated
 """
     
     # Write the pre-push hook
