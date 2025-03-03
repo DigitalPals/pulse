@@ -718,6 +718,8 @@
                                 <li>All event history will be cleared</li>
                                 <li>All speed test results will be removed</li>
                                 <li>All security scan results will be deleted</li>
+                                <li>All website monitoring results will be cleared</li>
+                                <li>All in-memory caches will be reset</li>
                             </ul>
                             <div class="option-warning">
                                 <i class="fas fa-exclamation-triangle"></i> This action cannot be undone. All data will be permanently deleted.
@@ -726,6 +728,26 @@
                         <div class="option-action">
                             <button type="button" class="btn btn-danger" onclick="confirmAction('clear_database')">
                                 <i class="fas fa-trash-alt"></i> Clear Database
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="advanced-option">
+                        <div class="option-info">
+                            <h4><i class="fas fa-database"></i> Remove Database</h4>
+                            <p>Completely remove the database file from the system instead of just clearing it.</p>
+                            <ul>
+                                <li>The database file will be physically deleted from the filesystem</li>
+                                <li>A new empty database will be created on next access</li>
+                                <li>All in-memory caches will be reset</li>
+                            </ul>
+                            <div class="option-warning">
+                                <i class="fas fa-exclamation-triangle"></i> This action cannot be undone. The database file will be permanently removed from the system.
+                            </div>
+                        </div>
+                        <div class="option-action">
+                            <button type="button" class="btn btn-danger" onclick="confirmAction('remove_database')">
+                                <i class="fas fa-trash-alt"></i> Remove Database
                             </button>
                         </div>
                     </div>
@@ -820,6 +842,9 @@
         if (action === 'clear_database') {
             message = 'Are you sure you want to clear the database? This will delete all device information, events, and other data. This action cannot be undone.';
             formAction = '{{ url_for("settings") }}?action=clear_database';
+        } else if (action === 'remove_database') {
+            message = 'Are you sure you want to completely remove the database file from the system? This is more drastic than clearing the database. This action cannot be undone.';
+            formAction = '{{ url_for("settings") }}?action=remove_database';
         } else if (action === 'clear_config') {
             message = 'Are you sure you want to reset all configuration settings to their default values? This action cannot be undone.';
             formAction = '{{ url_for("settings") }}?action=clear_config';

@@ -85,8 +85,49 @@ def register_setup_routes(app, server):
             if action == 'clear_database':
                 # Clear the database
                 count = server.db_manager.clear_all_devices()
-                server.flash(f'Database cleared successfully. {count} devices removed.')
-                server.logger.warning(f"User initiated database clear. {count} devices removed.")
+                
+                # Reset in-memory caches if main_app is available
+                if server.main_app:
+                    # Reset network scanner caches
+                    if hasattr(server.main_app.network_scanner, 'current_scan_devices'):
+                        server.main_app.network_scanner.current_scan_devices = set()
+                    if hasattr(server.main_app.network_scanner, 'previous_scan_devices'):
+                        server.main_app.network_scanner.previous_scan_devices = set()
+                    
+                    # Reset fingerprinter cache if it exists
+                    if (server.main_app.network_scanner.fingerprinter and
+                        hasattr(server.main_app.network_scanner.fingerprinter, 'fingerprinted_mac_addresses')):
+                        server.main_app.network_scanner.fingerprinter.fingerprinted_mac_addresses = set()
+                        server.logger.info("Reset fingerprinter in-memory cache")
+                
+                server.flash(f'Database cleared successfully. {count} devices and all related data removed.')
+                server.logger.warning(f"User initiated database clear. {count} devices and all related data removed.")
+                return server.redirect(server.url_for('settings'))
+            elif action == 'remove_database':
+                # Completely remove the database file
+                success = server.db_manager.remove_database()
+                
+                # Reset in-memory caches if main_app is available
+                if server.main_app:
+                    # Reset network scanner caches
+                    if hasattr(server.main_app.network_scanner, 'current_scan_devices'):
+                        server.main_app.network_scanner.current_scan_devices = set()
+                    if hasattr(server.main_app.network_scanner, 'previous_scan_devices'):
+                        server.main_app.network_scanner.previous_scan_devices = set()
+                    
+                    # Reset fingerprinter cache if it exists
+                    if (server.main_app.network_scanner.fingerprinter and
+                        hasattr(server.main_app.network_scanner.fingerprinter, 'fingerprinted_mac_addresses')):
+                        server.main_app.network_scanner.fingerprinter.fingerprinted_mac_addresses = set()
+                        server.logger.info("Reset fingerprinter in-memory cache")
+                
+                if success:
+                    server.flash('Database file completely removed from the system.')
+                    server.logger.warning("User initiated complete database removal.")
+                else:
+                    server.flash('Failed to remove database file. Check logs for details.', 'error')
+                    server.logger.error("Failed to remove database file.")
+                
                 return server.redirect(server.url_for('settings'))
             elif action == 'clear_config':
                 # Reset configuration to defaults

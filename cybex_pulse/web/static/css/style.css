@@ -2608,23 +2608,79 @@ td.message-column {
     font-weight: 500;
 }
 
+/* Hamburger menu */
+.menu-toggle {
+    display: none;
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 1000;
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.menu-toggle i {
+    font-size: 18px;
+}
+
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+    .menu-toggle {
+        display: block;
+    }
+
+    .container {
+        position: relative;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: -250px;
+        top: 0;
+        height: 100vh;
+        z-index: 999;
+        transition: left 0.3s ease;
+        box-shadow: none;
+    }
+
+    .sidebar.active {
+        left: 0;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    
+    /* Dashboard panels tablet layout */
+    .dashboard-panels {
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+}
+
 @media (max-width: 768px) {
     .container {
         flex-direction: column;
     }
 
     .sidebar {
-        width: 100%;
+        width: 250px;
         padding: 10px 0;
     }
 
-    .sidebar-header {
-        padding: 0 10px 10px;
-    }
-
     .main-content {
-        padding: 10px;
+        padding: 15px;
     }
 
     .grid {
@@ -2706,6 +2762,56 @@ td.message-column {
         width: 100%;
         justify-content: center;
     }
+    
+    /* Header adjustments for mobile */
+    .header {
+        padding-top: 40px; /* Make room for the hamburger menu */
+    }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+    .main-content {
+        padding: 10px;
+    }
+    
+    .header h2 {
+        font-size: 20px;
+    }
+    
+    .header-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .btn {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .card {
+        padding: 12px;
+    }
+    
+    .card-header h3 {
+        font-size: 16px;
+    }
+}
+
+/* Overlay for when sidebar is active on mobile */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+}
+
+.sidebar-overlay.active {
+    display: block;
 }
 
 /* For status page */

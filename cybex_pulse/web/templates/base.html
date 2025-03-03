@@ -13,8 +13,16 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    <!-- Hamburger menu toggle button -->
+    <button class="menu-toggle" id="menuToggle">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <!-- Overlay for when sidebar is active on mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
     <div class="container">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Cybex Pulse" class="logo">
             </div>
@@ -188,6 +196,54 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const menuToggle = document.getElementById('menuToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            // Function to toggle sidebar
+            function toggleSidebar() {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+                
+                // Toggle menu icon between bars and times
+                if (sidebar.classList.contains('active')) {
+                    menuToggle.innerHTML = '<i class="fas fa-times"></i>';
+                } else {
+                    menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+                }
+            }
+            
+            // Event listeners for sidebar toggle
+            if (menuToggle) {
+                menuToggle.addEventListener('click', toggleSidebar);
+            }
+            
+            // Close sidebar when clicking on overlay
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', toggleSidebar);
+            }
+            
+            // Close sidebar when clicking on a menu item (for mobile)
+            const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
+                        toggleSidebar();
+                    }
+                });
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024) {
+                    sidebar.classList.remove('active');
+                    sidebarOverlay.classList.remove('active');
+                    menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+                }
+            });
+            
+            // Update functionality
             const updateLink = document.getElementById('update-link');
             
             if (updateLink) {

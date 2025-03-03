@@ -724,7 +724,42 @@ class DatabaseManager:
         # Also delete related security scans as they have foreign key constraints
         cursor.execute('DELETE FROM security_scans')
         
+        # Clear all events
+        cursor.execute('DELETE FROM events')
+        
+        # Clear speed tests
+        cursor.execute('DELETE FROM speed_tests')
+        
+        # Clear website checks
+        cursor.execute('DELETE FROM website_checks')
+        
         conn.commit()
         
-        logger.info(f"Cleared all {count} devices from the database")
+        logger.info(f"Cleared all {count} devices and all related data from the database")
         return count
+        
+    def remove_database(self) -> bool:
+        """Completely remove the database file from the filesystem.
+        
+        This is more drastic than clear_all_devices() as it removes the entire database file
+        rather than just clearing the data within it.
+        
+        Returns:
+            bool: True if the database was successfully removed, False otherwise
+        """
+        # Close any existing connections
+        self.close()
+        
+        try:
+            # Check if the file exists before attempting to remove it
+            if self.db_path.exists():
+                # Remove the database file
+                self.db_path.unlink()
+                logger.warning(f"Database file completely removed: {self.db_path}")
+                return True
+            else:
+                logger.warning(f"Database file does not exist: {self.db_path}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to remove database file: {e}")
+            return False
