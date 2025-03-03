@@ -175,53 +175,106 @@
         <div class="card-header">
             <h3>Recent Events</h3>
         </div>
-        <div class="events-container" id="events-container">
-            {% for event in events %}
-            <div class="event-item {% if event.severity == 'error' %}event-error{% elif event.severity == 'warning' %}event-warning{% else %}event-info{% endif %}">
-                <div class="event-meta">
-                    <span class="event-time" title="{{ event.timestamp|timestamp_to_time }}">
-                        <i class="fas fa-clock"></i> {{ event.timestamp|timestamp_to_relative_time }}
-                    </span>
-                    {% if event.severity == 'error' %}
-                    <span class="badge badge-danger">{{ event.event_type }}</span>
-                    {% elif event.severity == 'warning' %}
-                    <span class="badge badge-warning">{{ event.event_type }}</span>
-                    {% else %}
-                    <span class="badge badge-info">{{ event.event_type }}</span>
-                    {% endif %}
-                </div>
-                <div class="event-message" title="{{ event.message }}">
-                    {% if event.details %}
-                        {% set details = event.details|from_json %}
-                        {% if details.mac %}
-                            {% if 'Device went offline:' in event.message %}
-                                Device went offline: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname }}</a> ({{ details.ip }})
-                            {% elif 'Device detected:' in event.message or 'New device detected:' in event.message %}
-                                {{ event.message.split(':')[0] }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ details.hostname or details.ip }}</a> ({{ details.ip }})
-                            {% elif 'Device fingerprinted:' in event.message or 'Device identified:' in event.message or 'Device identified from vendor:' in event.message %}
-                                {% set msg_type = event.message.split(':')[0] %}
-                                {% set device_name = details.hostname %}
-                                {% if details.manufacturer and details.model %}
-                                    {% set device_name = details.manufacturer + ' ' + details.model %}
-                                {% endif %}
-                                {{ msg_type }}: <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">{{ device_name or details.ip }}</a> ({{ details.ip }})
+        <div class="events-table-container">
+            <table class="events-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Device</th>
+                        <th>IP Address</th>
+                        <th>Time</th>
+                        <th>Event Type</th>
+                    </tr>
+                </thead>
+                <tbody id="events-container">
+                    {% for event in events %}
+                    <tr class="event-row {% if event.severity == 'error' %}event-error{% elif event.severity == 'warning' %}event-warning{% else %}event-info{% endif %}">
+                        <td class="event-icon-cell">
+                            {% if event.event_type == 'device_detected' %}
+                                <i class="fas fa-plus-circle event-icon"></i>
+                            {% elif event.event_type == 'device_offline' %}
+                                <i class="fas fa-minus-circle event-icon"></i>
+                            {% elif event.event_type == 'device_fingerprinted' %}
+                                <i class="fas fa-fingerprint event-icon"></i>
+                            {% elif event.event_type == 'alert' %}
+                                <i class="fas fa-exclamation-triangle event-icon"></i>
+                            {% elif event.event_type == 'speed_test' %}
+                                <i class="fas fa-tachometer-alt event-icon"></i>
+                            {% elif event.event_type == 'website_check' %}
+                                <i class="fas fa-globe event-icon"></i>
+                            {% elif event.event_type == 'security_scan' %}
+                                <i class="fas fa-shield-alt event-icon"></i>
+                            {% elif event.event_type == 'system' %}
+                                <i class="fas fa-cogs event-icon"></i>
                             {% else %}
-                                {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
+                                <i class="fas fa-info-circle event-icon"></i>
                             {% endif %}
-                        {% else %}
-                            {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
-                        {% endif %}
+                        </td>
+                        <td class="event-device-cell">
+                            {% if event.details %}
+                                {% set details = event.details|from_json %}
+                                {% if details.mac %}
+                                    <a href="{{ url_for('device_details', mac_address=details.mac) }}" class="device-name">
+                                        {% if details.hostname %}
+                                            {{ details.hostname }}
+                                        {% elif details.manufacturer and details.model %}
+                                            {{ details.manufacturer }} {{ details.model }}
+                                        {% else %}
+                                            {{ details.ip }}
+                                        {% endif %}
+                                    </a>
+                                {% else %}
+                                    <span class="event-no-device">{{ event.message }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="event-no-device">{{ event.message }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="event-ip-cell">
+                            {% if event.details %}
+                                {% set details = event.details|from_json %}
+                                {% if details.mac %}
+                                    {{ details.ip }}
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="event-time-cell">
+                            <span class="event-time" title="{{ event.timestamp|timestamp_to_time }}">
+                                {{ event.timestamp|timestamp_to_relative_time }}
+                            </span>
+                        </td>
+                        <td class="event-tag-cell">
+                            {% if event.event_type == 'device_detected' %}
+                                <span class="event-tag tag-detected">New Device</span>
+                            {% elif event.event_type == 'device_offline' %}
+                                <span class="event-tag tag-offline">Offline</span>
+                            {% elif event.event_type == 'device_fingerprinted' %}
+                                <span class="event-tag tag-fingerprinted">Identified</span>
+                            {% elif event.event_type == 'alert' %}
+                                <span class="event-tag tag-alert">Alert</span>
+                            {% elif event.event_type == 'speed_test' %}
+                                <span class="event-tag tag-speed">Speed Test</span>
+                            {% elif event.event_type == 'website_check' %}
+                                <span class="event-tag tag-website">Website</span>
+                            {% elif event.event_type == 'security_scan' %}
+                                <span class="event-tag tag-security">Security</span>
+                            {% elif event.event_type == 'system' %}
+                                <span class="event-tag tag-system">System</span>
+                            {% else %}
+                                <span class="event-tag tag-info">Info</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                     {% else %}
-                        {{ event.message|replace('Device ', '<span class="device-name">Device ')|replace('device ', '<span class="device-name">device ')|safe }}</span>
-                    {% endif %}
-                </div>
-            </div>
-            {% else %}
-            <div class="no-events">
-                <i class="fas fa-bell-slash"></i>
-                <p>No events recorded yet</p>
-            </div>
-            {% endfor %}
+                    <tr>
+                        <td colspan="5" class="no-events">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>No events recorded yet</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         <div class="card-footer">
             <a href="{{ url_for('events') }}" class="btn btn-secondary">View All Events</a>
@@ -442,38 +495,85 @@
                 if (events.length > 0) {
                     let html = '';
                     events.forEach(event => {
-                        let badgeClass = 'badge-info';
                         let eventClass = 'event-info';
+                        let eventIcon = '<i class="fas fa-info-circle event-icon"></i>';
+                        let eventTag = '<span class="event-tag tag-info">Info</span>';
                         
+                        // Set event class based on severity
                         if (event.severity === 'error') {
-                            badgeClass = 'badge-danger';
                             eventClass = 'event-error';
                         } else if (event.severity === 'warning') {
-                            badgeClass = 'badge-warning';
                             eventClass = 'event-warning';
                         }
                         
+                        // Set event icon based on event type
+                        if (event.event_type === 'device_detected') {
+                            eventIcon = '<i class="fas fa-plus-circle event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-detected">New Device</span>';
+                        } else if (event.event_type === 'device_offline') {
+                            eventIcon = '<i class="fas fa-minus-circle event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-offline">Offline</span>';
+                        } else if (event.event_type === 'device_fingerprinted') {
+                            eventIcon = '<i class="fas fa-fingerprint event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-fingerprinted">Identified</span>';
+                        } else if (event.event_type === 'alert') {
+                            eventIcon = '<i class="fas fa-exclamation-triangle event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-alert">Alert</span>';
+                        } else if (event.event_type === 'speed_test') {
+                            eventIcon = '<i class="fas fa-tachometer-alt event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-speed">Speed Test</span>';
+                        } else if (event.event_type === 'website_check') {
+                            eventIcon = '<i class="fas fa-globe event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-website">Website</span>';
+                        } else if (event.event_type === 'security_scan') {
+                            eventIcon = '<i class="fas fa-shield-alt event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-security">Security</span>';
+                        } else if (event.event_type === 'system') {
+                            eventIcon = '<i class="fas fa-cogs event-icon"></i>';
+                            eventTag = '<span class="event-tag tag-system">System</span>';
+                        }
+                        
+                        // Format device information
+                        let deviceInfo = `<span class="event-no-device">${event.message}</span>`;
+                        if (event.details) {
+                            try {
+                                const details = JSON.parse(event.details);
+                                if (details.mac) {
+                                    let deviceName = details.hostname || details.ip;
+                                    if (details.manufacturer && details.model) {
+                                        deviceName = `${details.manufacturer} ${details.model}`;
+                                    }
+                                    deviceInfo = `<a href="/devices/${details.mac}" class="device-name">${deviceName}</a>`;
+                                    const ipAddress = details.ip;
+                                }
+                            } catch(e) {
+                                console.error('Error parsing event details:', e);
+                            }
+                        }
+                        
                         html += `
-                            <div class="event-item ${eventClass}">
-                                <div class="event-meta">
+                            <tr class="event-row ${eventClass}">
+                                <td class="event-icon-cell">${eventIcon}</td>
+                                <td class="event-device-cell">${deviceInfo}</td>
+                                <td class="event-ip-cell">${details && details.mac ? details.ip : ''}</td>
+                                <td class="event-time-cell">
                                     <span class="event-time" title="${formatTimestamp(event.timestamp)}">
-                                        <i class="fas fa-clock"></i> ${formatRelativeTime(event.timestamp)}
+                                        ${formatRelativeTime(event.timestamp)}
                                     </span>
-                                    <span class="badge ${badgeClass}">${event.event_type}</span>
-                                </div>
-                                <div class="event-message" title="${event.message}">
-                                    ${formatEventMessage(event)}
-                                </div>
-                            </div>
+                                </td>
+                                <td class="event-tag-cell">${eventTag}</td>
+                            </tr>
                         `;
                     });
                     eventsContainer.innerHTML = html;
                 } else {
                     eventsContainer.innerHTML = `
-                        <div class="no-events">
-                            <i class="fas fa-bell-slash"></i>
-                            <p>No events recorded yet</p>
-                        </div>
+                        <tr>
+                            <td colspan="5" class="no-events">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>No events recorded yet</p>
+                            </td>
+                        </tr>
                     `;
                 }
                 
@@ -487,36 +587,6 @@
     function autoRefreshImportantDevices() {
         // Fetch updated device data
         // Implementation would go here
-    }
-    
-    // Function to format event messages and create links to device details
-    function formatEventMessage(event) {
-        // If event has details, parse it
-        if (event.details) {
-            try {
-                const details = JSON.parse(event.details);
-                if (details.mac) {
-                    if (event.message.includes('Device went offline:')) {
-                        return `Device went offline: <a href="/devices/${details.mac}" class="device-name">${details.hostname}</a> (${details.ip})`;
-                    } else if (event.message.includes('Device detected:') || event.message.includes('New device detected:')) {
-                        const prefix = event.message.split(':')[0];
-                        return `${prefix}: <a href="/devices/${details.mac}" class="device-name">${details.hostname || details.ip}</a> (${details.ip})`;
-                    } else if (event.message.includes('Device fingerprinted:') || event.message.includes('Device identified:') || event.message.includes('Device identified from vendor:')) {
-                        const msgType = event.message.split(':')[0];
-                        let deviceName = details.hostname || '';
-                        if (details.manufacturer && details.model) {
-                            deviceName = `${details.manufacturer} ${details.model}`;
-                        }
-                        return `${msgType}: <a href="/devices/${details.mac}" class="device-name">${deviceName || details.ip}</a> (${details.ip})`;
-                    }
-                }
-            } catch(e) {
-                console.error('Error parsing event details:', e);
-            }
-        }
-        
-        // Default formatting if no special case applies
-        return event.message.replace(/Device /g, '<span class="device-name">Device ').replace(/device /g, '<span class="device-name">device ') + '</span>';
     }
     
     // Call refreshData immediately to load events on page load

@@ -1329,15 +1329,17 @@ input:checked + .toggle-slider:before {
 }
 
 /* Recent Events Styling */
-.events-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
+.events-table-container {
     margin-bottom: 16px;
+    overflow-x: auto;
 }
 
-.event-item {
-    padding: 14px 16px;
+.events-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.event-row {
     border-left: 3px solid transparent;
     border-bottom: 1px solid var(--border-color);
     transition: background-color 0.2s ease;
@@ -1349,7 +1351,7 @@ input:checked + .toggle-slider:before {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.event-item:hover {
+.event-row:hover {
     background-color: var(--btn-hover);
 }
 
@@ -1367,25 +1369,65 @@ input:checked + .toggle-slider:before {
     border-left-color: var(--highlight-blue);
 }
 
-.event-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
+.event-icon-cell {
+    width: 50px;
+    text-align: center;
+    padding: 12px 8px;
+    vertical-align: middle;
 }
 
-.event-time {
+.event-icon {
+    font-size: 18px;
+    color: var(--text-muted);
+}
+
+.event-error .event-icon {
+    color: var(--red);
+}
+
+.event-warning .event-icon {
+    color: var(--yellow);
+}
+
+.event-info .event-icon {
+    color: var(--highlight-blue);
+}
+
+.event-device-cell {
+    padding: 12px 8px;
+    vertical-align: middle;
+    min-width: 200px;
+    max-width: 300px;
+}
+
+.event-device-cell {
+    padding: 12px 8px;
+    vertical-align: middle;
+    min-width: 180px;
+    max-width: 250px;
+}
+
+.event-device-cell .device-name {
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+.event-ip-cell {
+    padding: 12px 8px;
+    vertical-align: middle;
+    width: 120px;
+    font-family: monospace;
     font-size: 12px;
     color: var(--text-muted);
-    background-color: rgba(0, 0, 0, 0.1);
-    padding: 2px 8px;
-    border-radius: 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    white-space: nowrap;
 }
 
-.event-message {
+.event-device-cell .event-no-device {
     color: var(--text);
     font-size: 14px;
     line-height: 1.4;
@@ -1397,14 +1439,83 @@ input:checked + .toggle-slider:before {
     cursor: help;
 }
 
-/* Add special formatting for device names in event messages */
-.event-message .device-name {
-    max-width: 80%;
-    display: inline-block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.event-time-cell {
+    width: 100px;
+    text-align: center;
+    padding: 12px 8px;
     vertical-align: middle;
+}
+
+.event-time {
+    font-size: 12px;
+    color: var(--text-muted);
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.event-tag-cell {
+    width: 120px;
+    text-align: center;
+    padding: 12px 8px;
+    vertical-align: middle;
+}
+
+.event-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.tag-detected {
+    background-color: rgba(76, 175, 80, 0.15);
+    color: var(--green);
+}
+
+.tag-offline {
+    background-color: rgba(217, 58, 58, 0.15);
+    color: var(--red);
+}
+
+.tag-fingerprinted {
+    background-color: rgba(137, 180, 250, 0.15);
+    color: var(--highlight-blue);
+}
+
+.tag-alert {
+    background-color: rgba(217, 58, 58, 0.15);
+    color: var(--red);
+}
+
+.tag-speed {
+    background-color: rgba(166, 227, 161, 0.15);
+    color: var(--green);
+}
+
+.tag-website {
+    background-color: rgba(249, 226, 175, 0.15);
+    color: var(--yellow);
+}
+
+.tag-security {
+    background-color: rgba(203, 166, 247, 0.15);
+    color: var(--accent);
+}
+
+.tag-system {
+    background-color: rgba(137, 180, 250, 0.15);
+    color: var(--highlight-blue);
+}
+
+.tag-info {
+    background-color: rgba(137, 180, 250, 0.15);
+    color: var(--highlight-blue);
 }
 
 .no-events {
