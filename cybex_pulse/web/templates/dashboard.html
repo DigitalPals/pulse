@@ -4,6 +4,22 @@
 
 {% block header %}Dashboard{% endblock %}
 
+{% block header_actions %}
+<div class="version-info-container">
+    <span class="version-number">v{{ version }}</span>
+    {% if is_dev_version %}<span class="dev-badge">dev</span>{% endif %}
+    <a href="#" id="update-link" class="update-status {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}">
+        {% if update_disabled %}
+            Updates Disabled
+        {% elif update_available %}
+            Update Available
+        {% else %}
+            Up to Date
+        {% endif %}
+    </a>
+</div>
+{% endblock %}
+
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}

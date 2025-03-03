@@ -89,25 +89,16 @@
                         </a>
                     </li>
                 </ul>
+                <!-- Copyright below menu items with divider -->
+                <div class="copyright-container">
+                    <div class="copyright">
+                        <span>© Cybex Pulse</span>
+                    </div>
+                </div>
                 <!-- Spacer to push footer to bottom -->
                 <div style="flex-grow: 1;"></div>
                 <div class="sidebar-footer">
-                    <div class="copyright">
-                        <span>© Cybex Pulse</span>
-                        <div class="version-info">
-                            <span class="version-number">v{{ version }}</span>
-                            {% if is_dev_version %}<span class="dev-badge">dev</span>{% endif %}
-                        </div>
-                        <a href="#" id="update-link" class="update-status {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}">
-                            {% if update_disabled %}
-                                Updates Disabled
-                            {% elif update_available %}
-                                Update Available
-                            {% else %}
-                                Up to Date
-                            {% endif %}
-                        </a>
-                    </div>
+                    <!-- Footer content if needed -->
                 </div>
             </nav>
         </div>
