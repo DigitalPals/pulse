@@ -8,25 +8,25 @@
 <form method="post" action="{{ url_for('settings') }}">
     <!-- Add tabbed navigation -->
     <div class="settings-tabs">
-        <a href="#network" class="tab-link active" onclick="showTab('network')">
+        <a href="#" class="tab-link active" data-tab="network" onclick="showTab(event, 'network')">
             <i class="fas fa-network-wired"></i> Network
         </a>
-        <a href="#alerts" class="tab-link" onclick="showTab('alerts')">
+        <a href="#" class="tab-link" data-tab="alerts" onclick="showTab(event, 'alerts')">
             <i class="fas fa-bell"></i> Alerts
         </a>
-        <a href="#monitoring" class="tab-link" onclick="showTab('monitoring')">
+        <a href="#" class="tab-link" data-tab="monitoring" onclick="showTab(event, 'monitoring')">
             <i class="fas fa-chart-line"></i> Monitoring
         </a>
-        <a href="#security" class="tab-link" onclick="showTab('security')">
+        <a href="#" class="tab-link" data-tab="security" onclick="showTab(event, 'security')">
             <i class="fas fa-shield-alt"></i> Security
         </a>
-        <a href="#fingerprinting" class="tab-link" onclick="showTab('fingerprinting')">
+        <a href="#" class="tab-link" data-tab="fingerprinting" onclick="showTab(event, 'fingerprinting')">
             <i class="fas fa-fingerprint"></i> Fingerprinting
         </a>
-        <a href="#interface" class="tab-link" onclick="showTab('interface')">
+        <a href="#" class="tab-link" data-tab="interface" onclick="showTab(event, 'interface')">
             <i class="fas fa-desktop"></i> Interface
         </a>
-        <a href="#system" class="tab-link" onclick="showTab('system')">
+        <a href="#" class="tab-link" data-tab="system" onclick="showTab(event, 'system')">
             <i class="fas fa-cogs"></i> System
         </a>
     </div>
@@ -706,7 +706,10 @@
 {% block scripts %}
 <script>
     // Function to show the selected tab and hide others
-    function showTab(tabId) {
+    function showTab(event, tabId) {
+        // Prevent default anchor behavior
+        event.preventDefault();
+        
         // Hide all tab contents
         var tabContents = document.getElementsByClassName('tab-content');
         for (var i = 0; i < tabContents.length; i++) {
@@ -723,13 +726,15 @@
         }
         
         // Add active class to clicked tab
-        var activeTab = document.querySelector('.tab-link[href="#' + tabId + '"]');
+        var activeTab = document.querySelector('.tab-link[data-tab="' + tabId + '"]');
         activeTab.classList.add('active');
     }
     
     // When the page loads, ensure the network tab is active
     document.addEventListener('DOMContentLoaded', function() {
-        showTab('network');
+        // Create a mock event object since we're not handling a real click event
+        const mockEvent = { preventDefault: function() {} };
+        showTab(mockEvent, 'network');
     });
     
     // Function to toggle installation instructions visibility
