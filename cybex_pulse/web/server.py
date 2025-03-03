@@ -2,6 +2,7 @@
 Web server module for Cybex Pulse.
 """
 import hashlib
+import json
 import logging
 import os
 from functools import wraps
@@ -43,7 +44,7 @@ class WebServer:
         
         # Import Flask here to avoid dependency if web interface is disabled
         try:
-            from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash
+            from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash, Response, stream_with_context
             import werkzeug.serving
             self.flask = Flask
             self.jsonify = jsonify
@@ -53,7 +54,10 @@ class WebServer:
             self.url_for = url_for
             self.session = session
             self.flash = flash
+            self.Response = Response
+            self.stream_with_context = stream_with_context
             self.werkzeug = werkzeug
+            self.json = json  # Use the imported json module
         except ImportError:
             self.logger.error("Flask not installed. Web interface disabled.")
             return

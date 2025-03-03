@@ -206,8 +206,8 @@
                                     updateLink.classList.remove('up-to-date');
                                     updateLink.innerHTML = '<i class="fas fa-arrow-circle-up"></i> Update Available';
                                     
-                                    if (confirm('A new version of Pulse is available. Do you want to update?')) {
-                                        performUpdate();
+                                    if (confirm('A new version of Pulse is available. Do you want to view the update page?')) {
+                                        window.location.href = '/update-page';
                                     }
                                 } else if (data.error && data.error.includes('not a git repository')) {
                                     updateLink.classList.add('disabled');
@@ -223,8 +223,8 @@
                             });
                     } else {
                         // If update is available
-                        if (confirm('A new version of Pulse is available. Do you want to update?')) {
-                            performUpdate();
+                        if (confirm('A new version of Pulse is available. Do you want to view the update page?')) {
+                            window.location.href = '/update-page';
                         }
                     }
                 });

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}System Update{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1>System Update</h1>
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Update Progress</h5>
+                    <span id="update-status" class="badge badge-primary">Connecting...</span>
+                </div>
+                <div class="card-body">
+                    <div id="update-console" class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace;">
+                        <div class="text-muted">Connecting to update stream...</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex justify-content-between">
+                        <button id="back-btn" class="btn btn-secondary" onclick="window.location.href='/'">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </button>
+                        <button id="update-btn" class="btn btn-primary" onclick="startUpdate()">
+                            <i class="fas fa-sync-alt"></i> Start Update
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let updateEventSource = null;
+    let updateInProgress = false;
+
+    // Check if an update is already in progress when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        checkUpdateStatus();
+    });
+
+    function checkUpdateStatus() {
+        fetch('/update-status')
+            .then(response => response.json())
+            .then(data => {
+                updateInProgress = data.in_progress;
+                if (updateInProgress) {
+                    document.getElementById('update-btn').disabled = true;
+                    document.getElementById('update-status').textContent = 'In Progress';
+                    document.getElementById('update-status').className = 'badge badge-warning';
+                    connectToUpdateStream();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking update status:', error);
+            });
+    }
+
+    function startUpdate() {
+        if (updateInProgress) {
+            return;
+        }
+
+        // Clear the console
+        const updateConsole = document.getElementById('update-console');
+        updateConsole.innerHTML = '<div class="text-muted">Starting update process...</div>';
+
+        // Update UI
+        document.getElementById('update-btn').disabled = true;
+        document.getElementById('update-status').textContent = 'Starting';
+        document.getElementById('update-status').className = 'badge badge-warning';
+
+        // Call the update API
+        fetch('/perform-update')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    appendToConsole('Error starting update: ' + data.error, true);
+                    document.getElementById('update-status').textContent = 'Failed';
+                    document.getElementById('update-status').className = 'badge badge-danger';
+                    document.getElementById('update-btn').disabled = false;
+                } else {
+                    updateInProgress = true;
+                    connectToUpdateStream();
+                }
+            })
+            .catch(error => {
+                appendToConsole('Error starting update: ' + error, true);
+                document.getElementById('update-status').textContent = 'Failed';
+                document.getElementById('update-status').className = 'badge badge-danger';
+                document.getElementById('update-btn').disabled = false;
+            });
+    }
+
+    function connectToUpdateStream() {
+        // Close any existing connection
+        if (updateEventSource) {
+            updateEventSource.close();
+        }
+
+        // Connect to the SSE endpoint
+        updateEventSource = new EventSource('/update-stream');
+        
+        // Handle messages
+        updateEventSource.addEventListener('message', function(event) {
+            const data = JSON.parse(event.data);
+            appendToConsole(data.message, data.is_error);
+        });
+
+        // Handle errors
+        updateEventSource.addEventListener('error', function(event) {
+            const data = JSON.parse(event.data);
+            appendToConsole(data.message, true);
+        });
+
+        // Handle completion
+        updateEventSource.addEventListener('complete', function(event) {
+            const data = JSON.parse(event.data);
+            appendToConsole(data.message, false);
+            document.getElementById('update-status').textContent = 'Completed';
+            document.getElementById('update-status').className = 'badge badge-success';
+            updateEventSource.close();
+            updateInProgress = false;
+            
+            // Re-enable the update button after a delay (system will be restarting)
+            setTimeout(function() {
+                document.getElementById('update-btn').disabled = false;
+            }, 10000);
+        });
+
+        // Handle connection errors
+        updateEventSource.onerror = function() {
+            appendToConsole('Connection to update stream lost. The system may be restarting...', true);
+            document.getElementById('update-status').textContent = 'Disconnected';
+            document.getElementById('update-status').className = 'badge badge-secondary';
+            updateEventSource.close();
+        };
+    }
+
+    function appendToConsole(message, isError) {
+        const updateConsole = document.getElementById('update-console');
+        const messageElement = document.createElement('div');
+        
+        if (isError) {
+            messageElement.className = 'text-danger';
+            messageElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + message;
+        } else {
+            messageElement.className = 'text-light';
+            messageElement.textContent = message;
+        }
+        
+        updateConsole.appendChild(messageElement);
+        
+        // Auto-scroll to bottom
+        updateConsole.scrollTop = updateConsole.scrollHeight;
+    }
+</script>
+{% endblock %}

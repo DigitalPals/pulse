@@ -708,50 +708,85 @@ class CybexPulseApp:
         # TODO: Add logic to detect suspicious ports and send alerts
         # This could be implemented in a future version
         
-    def update_application(self) -> Tuple[bool, Optional[str]]:
+    def update_application(self, progress_callback=None) -> Tuple[bool, Optional[str]]:
         """Handle the application update process.
         
+        Args:
+            progress_callback: Optional callback function to receive real-time progress updates
+            
         Returns:
             tuple: (success, error_message)
         """
         self.logger.info("Starting application update process")
         
+        if progress_callback:
+            progress_callback("Starting update process...")
+        
         # Check for updates first
+        if progress_callback:
+            progress_callback("Checking for updates...")
+            
         update_available, error = self.update_checker.check_for_updates()
         if error:
+            if progress_callback:
+                progress_callback(f"Failed to check for updates: {error}", is_error=True)
             return False, f"Failed to check for updates: {error}"
             
         if not update_available:
+            if progress_callback:
+                progress_callback("No updates available", is_error=False)
             return False, "No updates available"
             
         # Perform update
-        success, error = self.update_checker.update_application()
+        if progress_callback:
+            progress_callback("Updates available, starting update process...")
+            
+        success, error = self.update_checker.update_application(progress_callback)
         if not success:
             return False, f"Update failed: {error}"
             
         self.logger.info("Application updated successfully, preparing to restart")
         
+        if progress_callback:
+            progress_callback("Update successful, preparing to restart...")
+        
         # Schedule restart
         restart_thread = threading.Thread(
             target=self._delayed_restart,
             name="RestartThread",
+            args=(progress_callback,),
             daemon=True
         )
         restart_thread.start()
         
         return True, "Update successful. Application will restart shortly."
         
-    def _delayed_restart(self, delay: int = 3) -> None:
+    def _delayed_restart(self, progress_callback=None, delay: int = 3) -> None:
         """Restart the application after a short delay.
         
         Args:
+            progress_callback: Optional callback function to receive real-time progress updates
             delay: Delay in seconds before restarting
         """
         self.logger.info(f"Application will restart in {delay} seconds")
-        time.sleep(delay)
         
+        if progress_callback:
+            progress_callback(f"Application will restart in {delay} seconds...")
+        
+        # Count down
+        for i in range(delay, 0, -1):
+            if progress_callback:
+                progress_callback(f"Restarting in {i} seconds...")
+            time.sleep(1)
+        
+        if progress_callback:
+            progress_callback("Cleaning up resources before restart...")
+            
         # Clean up resources
         self.cleanup()
         
+        if progress_callback:
+            progress_callback("Restarting application...")
+            
         # Restart the application
         self.update_checker.restart_application()

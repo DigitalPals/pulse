@@ -134,9 +134,12 @@ class UpdateChecker:
         self.update_available = self.current_commit_hash != self.latest_commit_hash
         return self.update_available, None
     
-    def update_application(self) -> Tuple[bool, Optional[str]]:
+    def update_application(self, progress_callback=None) -> Tuple[bool, Optional[str]]:
         """Update the application using git pull.
         
+        Args:
+            progress_callback: Optional callback function to receive real-time progress updates
+            
         Returns:
             tuple: (success, error_message)
         """
@@ -145,6 +148,8 @@ class UpdateChecker:
             if self.current_commit_hash.startswith("install-") or self.current_commit_hash == "unknown":
                 error_msg = "Cannot update: not a git repository installation."
                 self.logger.warning(error_msg)
+                if progress_callback:
+                    progress_callback(error_msg, is_error=True)
                 return False, error_msg
 
         try:
@@ -155,6 +160,9 @@ class UpdateChecker:
                 repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
             
             # First check if we're in a git repository
+            if progress_callback:
+                progress_callback("Checking repository status...")
+                
             repo_check = subprocess.run(
                 ['git', '-C', repo_dir, 'rev-parse', '--is-inside-work-tree'],
                 capture_output=True,
@@ -166,29 +174,89 @@ class UpdateChecker:
             if repo_check.returncode != 0:
                 error_msg = "Cannot update: not a git repository installation."
                 self.logger.warning(error_msg)
+                if progress_callback:
+                    progress_callback(error_msg, is_error=True)
                 return False, error_msg
             
+            # Run git status to show current state
+            if progress_callback:
+                progress_callback("Checking for local changes...")
+                
+            status_result = subprocess.run(
+                ['git', '-C', repo_dir, 'status', '--short'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if status_result.stdout.strip():
+                if progress_callback:
+                    progress_callback("Local changes detected:\n" + status_result.stdout)
+            else:
+                if progress_callback:
+                    progress_callback("Working directory clean")
+            
+            # Run git fetch to get latest changes
+            if progress_callback:
+                progress_callback("Fetching latest changes from remote repository...")
+                
+            fetch_result = subprocess.run(
+                ['git', '-C', repo_dir, 'fetch'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if fetch_result.stdout:
+                if progress_callback:
+                    progress_callback(fetch_result.stdout)
+            
             # Run git pull to update
+            if progress_callback:
+                progress_callback("Pulling latest changes...")
+                
             result = subprocess.run(
                 ['git', '-C', repo_dir, 'pull'],
-                check=True,
                 capture_output=True,
                 text=True,
                 timeout=60
             )
             
+            # Send output to callback
+            if progress_callback:
+                if result.stdout:
+                    progress_callback(result.stdout)
+                if result.stderr:
+                    progress_callback(result.stderr, is_error=True)
+            
             # Check for merge conflicts
             if "CONFLICT" in result.stdout or "CONFLICT" in result.stderr:
-                return False, "Merge conflict detected during update"
+                error_msg = "Merge conflict detected during update"
+                if progress_callback:
+                    progress_callback(error_msg, is_error=True)
+                return False, error_msg
             
             # Check for authentication failure
             if "Authentication failed" in result.stdout or "Authentication failed" in result.stderr:
-                return False, "Git authentication failed"
+                error_msg = "Git authentication failed"
+                if progress_callback:
+                    progress_callback(error_msg, is_error=True)
+                return False, error_msg
+            
+            # Check if any changes were pulled
+            if "Already up to date" in result.stdout:
+                if progress_callback:
+                    progress_callback("No changes to pull - already up to date")
+            else:
+                if progress_callback:
+                    progress_callback("Update successful")
             
             return True, None
         except subprocess.SubprocessError as e:
             error_msg = f"Failed to update application: {e}"
             self.logger.error(error_msg)
+            if progress_callback:
+                progress_callback(error_msg, is_error=True)
             return False, error_msg
     
     def restart_application(self) -> None:
