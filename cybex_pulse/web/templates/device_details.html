@@ -430,16 +430,25 @@
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
+        align-items: center; /* Align items vertically */
+    }
+    
+    .action-buttons form {
+        margin: 0; /* Remove form margins */
     }
     
     .action-buttons .btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 10px 18px;
+        padding: 0 18px;  /* Horizontal padding only */
         border-radius: 6px;
         font-weight: 500;
         transition: all 0.3s ease;
+        height: 38px;  /* Consistent height for all buttons */
+        line-height: 38px;  /* Match line height to height */
+        box-sizing: border-box; /* Ensure padding is included in height */
+        white-space: nowrap; /* Prevent text wrapping */
     }
     
     .action-buttons .btn i {
@@ -451,26 +460,41 @@
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
     
+    /* Specific button styles */
+    .btn-primary {
+        background-color: var(--accent);
+        color: #fff;
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--accent-dark, #0056b3);
+    }
+    
+    .btn-secondary {
+        background-color: var(--lighter-bg);
+        color: var(--text);
+    }
+    
+    .btn-secondary:hover {
+        background-color: var(--sidebar-bg);
+    }
+    
     .btn-edit {
         background-color: #3498db;
         color: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 10px 18px;
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.3s ease;
     }
     
     .btn-edit:hover {
         background-color: #2980b9;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
     
-    .btn-edit i {
-        margin-right: 8px;
+    .btn-fingerprint {
+        background-color: #9b59b6;
+        color: #fff;
+    }
+    
+    .btn-fingerprint:hover {
+        background-color: #8e44ad;
     }
     
     /* Port tags styling */
