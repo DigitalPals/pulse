@@ -29,6 +29,9 @@
         <a href="#" class="tab-link" data-tab="system" onclick="showTab(event, 'system')">
             <i class="fas fa-cogs"></i> System
         </a>
+        <a href="#" class="tab-link" data-tab="advanced" onclick="showTab(event, 'advanced')">
+            <i class="fas fa-tools"></i> Advanced
+        </a>
     </div>
 
     <!-- Network settings section -->
@@ -697,6 +700,64 @@
         </div>
     </div>
     
+    <!-- Advanced settings section -->
+    <div id="advanced" class="tab-content" style="display: none;">
+        <div class="card settings-card">
+            <div class="card-header">
+                <h3><i class="fas fa-tools"></i> Advanced Options</h3>
+                <p class="text-muted">These options perform actions that cannot be undone. Use with caution.</p>
+            </div>
+            <div class="card-body">
+                <div class="advanced-options">
+                    <div class="advanced-option">
+                        <div class="option-info">
+                            <h4><i class="fas fa-database"></i> Clear Database</h4>
+                            <p>Remove all stored device information, events, speed tests, and other data from the database.</p>
+                            <ul>
+                                <li>All device records will be deleted</li>
+                                <li>All event history will be cleared</li>
+                                <li>All speed test results will be removed</li>
+                                <li>All security scan results will be deleted</li>
+                            </ul>
+                            <div class="option-warning">
+                                <i class="fas fa-exclamation-triangle"></i> This action cannot be undone. All data will be permanently deleted.
+                            </div>
+                        </div>
+                        <div class="option-action">
+                            <button type="button" class="btn btn-danger" onclick="confirmAction('clear_database')">
+                                <i class="fas fa-trash-alt"></i> Clear Database
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="advanced-option">
+                        <div class="option-info">
+                            <h4><i class="fas fa-cog"></i> Clear Configuration</h4>
+                            <p>Reset all configuration settings to their default values.</p>
+                            <ul>
+                                <li>Network settings will be reset</li>
+                                <li>Alert settings will be reset</li>
+                                <li>Monitoring settings will be reset</li>
+                                <li>Web interface settings will be preserved</li>
+                            </ul>
+                            <div class="option-warning">
+                                <i class="fas fa-exclamation-triangle"></i> This action cannot be undone. You will need to reconfigure the application.
+                            </div>
+                        </div>
+                        <div class="option-action">
+                            <button type="button" class="btn btn-danger" onclick="confirmAction('clear_config')">
+                                <i class="fas fa-trash-alt"></i> Clear Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <span class="setting-tip"><i class="fas fa-info-circle"></i> These advanced options should only be used when necessary, such as when troubleshooting issues or when you want to start fresh.</span>
+            </div>
+        </div>
+    </div>
+    
     <div class="settings-actions">
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save All Settings</button>
     </div>
@@ -748,6 +809,30 @@
             buttonEl.innerHTML = '<i class="fas fa-times"></i> Hide Installation Instructions';
         } else {
             buttonEl.innerHTML = '<i class="fas fa-terminal"></i> Show Installation Instructions';
+        }
+    }
+    
+    // Function to confirm advanced actions
+    function confirmAction(action) {
+        let message = '';
+        let formAction = '';
+        
+        if (action === 'clear_database') {
+            message = 'Are you sure you want to clear the database? This will delete all device information, events, and other data. This action cannot be undone.';
+            formAction = '{{ url_for("settings") }}?action=clear_database';
+        } else if (action === 'clear_config') {
+            message = 'Are you sure you want to reset all configuration settings to their default values? This action cannot be undone.';
+            formAction = '{{ url_for("settings") }}?action=clear_config';
+        }
+        
+        if (confirm(message)) {
+            // Create and submit a form to perform the action
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = formAction;
+            
+            document.body.appendChild(form);
+            form.submit();
         }
     }
 </script>

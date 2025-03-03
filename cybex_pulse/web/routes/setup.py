@@ -79,6 +79,33 @@ def register_setup_routes(app, server):
     @app.route('/settings', methods=['GET', 'POST'])
     @server.login_required
     def settings():
+        # Handle advanced actions
+        action = server.request.args.get('action')
+        if server.request.method == 'POST' and action:
+            if action == 'clear_database':
+                # Clear the database
+                count = server.db_manager.clear_all_devices()
+                server.flash(f'Database cleared successfully. {count} devices removed.')
+                server.logger.warning(f"User initiated database clear. {count} devices removed.")
+                return server.redirect(server.url_for('settings'))
+            elif action == 'clear_config':
+                # Reset configuration to defaults
+                # Preserve web interface settings
+                web_interface_settings = server.config.get("web_interface")
+                
+                # Reset to defaults
+                server.config.config = server.config.DEFAULT_CONFIG.copy()
+                
+                # Restore web interface settings
+                server.config.set("web_interface", None, web_interface_settings)
+                
+                # Save the configuration
+                server.config.save()
+                
+                server.flash('Configuration reset to default values successfully.')
+                server.logger.warning("User initiated configuration reset.")
+                return server.redirect(server.url_for('settings'))
+        
         if server.request.method == 'POST':
             # Update settings
             update_settings_from_form(server, server.request.form)
@@ -101,9 +128,9 @@ def register_setup_routes(app, server):
             }
             
         return server.render_template('settings.html',
-                                  config=server.config.config,
-                                  missing_tools=missing_tools,
-                                  tool_status=server.tool_status)
+                                   config=server.config.config,
+                                   missing_tools=missing_tools,
+                                   tool_status=server.tool_status)
 
 
 def process_setup_step(server, step: int) -> None:
