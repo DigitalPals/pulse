@@ -1,10 +1,6 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=6.0"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
-write_to = "cybex_pulse/_version.py"
-write_to_template = '__version__ = "{version}"'
-fallback_version = "0.1.0"
-version_scheme = "post-release"
-local_scheme = "node-and-date"
+# Version is now managed through a VERSION file in the repository root
+# This ensures all users have the same version information

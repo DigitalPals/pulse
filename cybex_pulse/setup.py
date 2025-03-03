@@ -1,4 +1,5 @@
 from setuptools import setup, find_packages
+import os
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -6,11 +7,16 @@ with open("README.md", "r", encoding="utf-8") as fh:
 with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = fh.read().splitlines()
 
-# Note: The version here is just a fallback. The actual version is determined
-# at runtime by the VersionManager in cybex_pulse/utils/version_manager.py
+# Read version from VERSION file
+version = "0.1.0"  # Default fallback version
+version_file = os.path.join(os.path.dirname(__file__), "..", "VERSION")
+if os.path.exists(version_file):
+    with open(version_file, "r") as f:
+        version = f.read().strip()
+
 setup(
     name="cybex-pulse",
-    version="0.1.0",
+    version=version,
     author="Cybex Team",
     author_email="info@example.com",
     description="Home Network Monitoring Application",
