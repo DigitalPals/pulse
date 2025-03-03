@@ -2209,8 +2209,21 @@ td.message-column {
     text-align: right;
 }
 
-.device-ip, .device-mac {
+.device-ip {
     width: 140px;
+    color: var(--text-muted);
+    text-align: center;
+    font-family: monospace;
+    font-size: 13px;
+    padding: 4px 8px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.device-mac {
+    width: auto;
+    min-width: 140px;
     color: var(--text-muted);
     text-align: right;
     font-family: monospace;
@@ -2219,9 +2232,6 @@ td.message-column {
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 4px;
     transition: all 0.3s ease;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .device-item:hover .device-ip,

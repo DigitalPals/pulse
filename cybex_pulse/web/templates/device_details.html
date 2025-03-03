@@ -43,19 +43,35 @@
                 <h4 class="detail-section-title">Network Information</h4>
                 <div class="detail-row">
                     <div class="detail-label">IP Address:</div>
-                    <div class="detail-value">{{ device.ip_address }}</div>
+                    <div class="detail-value copyable" data-copy-value="{{ device.ip_address }}">
+                        {{ device.ip_address }}
+                        <span class="copy-icon"><i class="fas fa-copy"></i></span>
+                        <span class="copy-tooltip">Click to copy</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">MAC Address:</div>
-                    <div class="detail-value">{{ device.mac_address }}</div>
+                    <div class="detail-value copyable" data-copy-value="{{ device.mac_address }}">
+                        {{ device.mac_address }}
+                        <span class="copy-icon"><i class="fas fa-copy"></i></span>
+                        <span class="copy-tooltip">Click to copy</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">Hostname:</div>
-                    <div class="detail-value">{{ device.hostname or 'Unknown' }}</div>
+                    <div class="detail-value copyable" data-copy-value="{{ device.hostname or 'Unknown' }}">
+                        {{ device.hostname or 'Unknown' }}
+                        <span class="copy-icon"><i class="fas fa-copy"></i></span>
+                        <span class="copy-tooltip">Click to copy</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">Vendor:</div>
-                    <div class="detail-value">{{ device.vendor or 'Unknown' }}</div>
+                    <div class="detail-value copyable" data-copy-value="{{ device.vendor or 'Unknown' }}">
+                        {{ device.vendor or 'Unknown' }}
+                        <span class="copy-icon"><i class="fas fa-copy"></i></span>
+                        <span class="copy-tooltip">Click to copy</span>
+                    </div>
                 </div>
             </div>
             
@@ -824,6 +840,81 @@
     }
 </style>
 
+<style>
+    /* Copyable field styles */
+    .copyable {
+        position: relative;
+        cursor: pointer;
+        padding-right: 30px;
+        transition: all 0.2s ease;
+    }
+    
+    .copyable:hover {
+        background-color: var(--lighter-bg);
+        color: var(--text-important);
+    }
+    
+    .copy-icon {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0.6;
+        transition: all 0.2s ease;
+        color: var(--text-muted);
+    }
+    
+    .copyable:hover .copy-icon {
+        opacity: 1;
+        color: var(--accent);
+    }
+    
+    .copy-tooltip {
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--card-bg);
+        color: var(--text);
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-color);
+        z-index: 10;
+    }
+    
+    .copyable:hover .copy-tooltip {
+        opacity: 1;
+        visibility: visible;
+        top: -25px;
+    }
+    
+    .copyable.copied {
+        background-color: rgba(76, 175, 80, 0.1);
+    }
+    
+    .copyable.copied .copy-tooltip {
+        content: 'Copied!';
+        background-color: var(--green);
+        color: var(--dark-text);
+    }
+    
+    @keyframes copy-success {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+    
+    .copy-success {
+        animation: copy-success 0.3s ease-in-out;
+    }
+</style>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Enhance port tags with port info tooltips
@@ -903,6 +994,44 @@
                 }, 800);
             });
         }
+        
+        // Add copy to clipboard functionality
+        const copyableElements = document.querySelectorAll('.copyable');
+        
+        copyableElements.forEach(element => {
+            element.addEventListener('click', function() {
+                // Get the text to copy
+                const textToCopy = this.dataset.copyValue;
+                
+                // Create a temporary textarea element to copy from
+                const textarea = document.createElement('textarea');
+                textarea.value = textToCopy;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                
+                // Select and copy the text
+                textarea.select();
+                document.execCommand('copy');
+                
+                // Remove the temporary textarea
+                document.body.removeChild(textarea);
+                
+                // Show success feedback
+                const tooltip = this.querySelector('.copy-tooltip');
+                tooltip.textContent = 'Copied!';
+                this.classList.add('copied');
+                this.querySelector('.copy-icon').classList.add('copy-success');
+                
+                // Reset after a delay
+                setTimeout(() => {
+                    tooltip.textContent = 'Click to copy';
+                    this.classList.remove('copied');
+                    this.querySelector('.copy-icon').classList.remove('copy-success');
+                }, 2000);
+            });
+        });
     });
     
     // Add CSS animation for refresh button
