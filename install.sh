@@ -302,6 +302,25 @@ install_dependencies() {
     fi
 }
 
+# Set installation directories
+set_install_directories() {
+    log_info "Setting installation directories..."
+    
+    # Default to /opt/pulse as the installation directory
+    if [ -z "$INSTALL_DIR" ]; then
+        INSTALL_DIR="/opt/pulse"
+    fi
+    
+    # Create the installation directory if it doesn't exist
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log_info "Creating installation directory: $INSTALL_DIR"
+        $SUDO_CMD mkdir -p "$INSTALL_DIR" >> $LOG_FILE 2>&1 || log_error "Failed to create installation directory" "fatal"
+        $SUDO_CMD chmod 755 "$INSTALL_DIR" >> $LOG_FILE 2>&1
+    fi
+    
+    log_success "Install directory set to: $INSTALL_DIR"
+}
+
 # Install packages via system package manager only
 install_system_packages() {
     log_info "Installing all required Python packages via system package manager..."
@@ -936,33 +955,40 @@ install_system_packages() {
 clone_repository() {
     log_info "Setting up repository..."
     
-    # Get the current directory
-    CURRENT_DIR=$(pwd)
-    
-    # Check if repository already exists in the current directory
-    if [ -d "$CURRENT_DIR/pulse/.git" ]; then
+    # Check if repository already exists in the installation directory
+    if [ -d "$INSTALL_DIR/.git" ]; then
         log_info "Repository already exists, updating..."
-        cd "$CURRENT_DIR/pulse"
+        cd "$INSTALL_DIR"
         git pull >> $LOG_FILE 2>&1 || log_warning "Could not update the repository. Continuing with existing files."
-        cd "$CURRENT_DIR"
     else
-        # Clone the repository into the current directory
-        log_info "Cloning the repository..."
-        git clone "$REPO_URL" pulse >> $LOG_FILE 2>&1 || log_error "Failed to clone repository. Check your internet connection." "fatal"
+        # Is there a pulse directory inside the current directory?
+        if [ -d "$(pwd)/pulse/.git" ] && [ "$(pwd)" != "$INSTALL_DIR" ]; then
+            log_info "Repository exists in current directory, moving to installation directory..."
+            $SUDO_CMD rm -rf "$INSTALL_DIR" >> $LOG_FILE 2>&1 || true
+            $SUDO_CMD mkdir -p "$(dirname $INSTALL_DIR)" >> $LOG_FILE 2>&1
+            $SUDO_CMD mv "$(pwd)/pulse" "$INSTALL_DIR" >> $LOG_FILE 2>&1 || log_error "Failed to move repository to installation directory" "fatal"
+        else
+            # Clone the repository directly into the installation directory
+            log_info "Cloning the repository..."
+            git clone "$REPO_URL" "$INSTALL_DIR" >> $LOG_FILE 2>&1 || log_error "Failed to clone repository. Check your internet connection." "fatal"
+        fi
     fi
     
-    log_success "Repository setup completed"
+    # Ensure permissions are correct
+    $SUDO_CMD chmod -R 755 "$INSTALL_DIR" >> $LOG_FILE 2>&1
+    
+    log_success "Repository setup completed at $INSTALL_DIR"
 }
 
 # Create a wrapper script for running the application
 create_wrapper_script() {
     log_info "Creating wrapper script..."
     
-    # Get the full path
-    INSTALL_DIR=$(pwd)
+    # Create wrapper script in /usr/local/bin for system-wide access
+    WRAPPER_PATH="/usr/local/bin/cybex-pulse"
     
     # Create the wrapper script with a different name to avoid collision with directory
-    cat > cybex-pulse << EOF
+    cat > /tmp/cybex-pulse << EOF
 #!/bin/bash
 # Wrapper script for Cybex Pulse
 
@@ -980,52 +1006,49 @@ if ! command -v "\$PYTHON_CMD" &> /dev/null; then
     done
 fi
 
-# Add the proper paths to PYTHONPATH
-if [ -d "/opt/pulse/cybex_pulse" ]; then
-    # We have the correct path
-    export PYTHONPATH="/opt/pulse:\$PYTHONPATH"
-elif [ -d "cybex_pulse" ]; then
-    # We're in the repo directory
-    export PYTHONPATH="$(pwd):\$PYTHONPATH"
-elif [ -d "pulse/cybex_pulse" ]; then
-    # We're in a parent directory
-    export PYTHONPATH="$(pwd)/pulse:\$PYTHONPATH"
-else
-    # Fallback - scan for the possible location
-    for path in "/opt/pulse" "/opt" "/usr/local/lib" "/usr/lib"; do
-        if [ -d "\$path/cybex_pulse" ]; then
-            export PYTHONPATH="\$path:\$PYTHONPATH"
-            break
-        fi
-    done
-fi
+# Always use the correct installation directory path
+export PYTHONPATH="${INSTALL_DIR}:\$PYTHONPATH"
 
 # Fix for externally-managed-environment on newer Python installations
 if [ -z "\${PYTHONPATH_IGNORE_PEP668+x}" ]; then
     export PYTHONPATH_IGNORE_PEP668=1
 fi
 
+# Change to the installation directory to ensure git operations work correctly
+cd "${INSTALL_DIR}"
+
 # Handle broken pipe errors more gracefully
 exec "\$PYTHON_CMD" -m cybex_pulse "\$@" 2> >(grep -v 'BrokenPipeError' >&2)
 EOF
 
-    # Make it executable
-    chmod +x cybex-pulse
+    # Install the wrapper script
+    $SUDO_CMD mv /tmp/cybex-pulse "$WRAPPER_PATH"
+    $SUDO_CMD chmod +x "$WRAPPER_PATH"
     
-    # Create a symlink for backward compatibility
-    if [ ! -d "pulse" ]; then
-        ln -sf cybex-pulse pulse
+    # Create a symlink in the installation directory for direct execution
+    $SUDO_CMD ln -sf "$WRAPPER_PATH" "$INSTALL_DIR/cybex-pulse"
+    
+    # Create a compatibility script at /opt/cybex-pulse if it's a different location
+    if [ "$INSTALL_DIR" != "/opt/cybex-pulse" ]; then
+        log_info "Creating compatibility script at /opt/cybex-pulse..."
+        $SUDO_CMD mkdir -p /opt 2>/dev/null || true
+        cat > /tmp/cybex-pulse-compat << EOF
+#!/bin/bash
+# Compatibility wrapper for Cybex Pulse
+# Redirects to the main wrapper script
+
+exec "$WRAPPER_PATH" "\$@"
+EOF
+        $SUDO_CMD mv /tmp/cybex-pulse-compat /opt/cybex-pulse
+        $SUDO_CMD chmod +x /opt/cybex-pulse
     fi
     
-    log_success "Wrapper script created"
+    log_success "Wrapper script created at $WRAPPER_PATH"
 }
 
 # Create a systemd service file
 create_service() {
     log_info "Creating systemd service..."
-    
-    # Get the current directory for the service file
-    INSTALL_DIR=$(pwd)
     
     # Create necessary system directories for logs and data
     log_info "Creating system directories for logs and data..."
@@ -1043,7 +1066,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/cybex-pulse
+ExecStart=/usr/local/bin/cybex-pulse
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONPATH=${INSTALL_DIR}"
 Environment="PYTHONPATH_IGNORE_PEP668=1"
@@ -1177,9 +1200,6 @@ EOF
 verify_installation() {
     log_info "Verifying installation..."
     
-    # Save the current directory
-    CURRENT_DIR=$(pwd)
-    
     # Check Python interpreter
     if [ -z "$PYTHON_CMD" ]; then
         # If PYTHON_CMD is not set, try to find a suitable Python
@@ -1219,12 +1239,19 @@ verify_installation() {
     fi
     
     # Check if wrapper script works
-    if [ -f "${INSTALL_DIR}/cybex-pulse" ]; then
-        log_success "Wrapper script created successfully"
-    elif [ -f "${CURRENT_DIR}/cybex-pulse" ]; then
-        log_success "Wrapper script created successfully"
+    if [ -f "/usr/local/bin/cybex-pulse" ]; then
+        log_success "Wrapper script created successfully at /usr/local/bin/cybex-pulse"
+    elif [ -f "${INSTALL_DIR}/cybex-pulse" ]; then
+        log_success "Wrapper script created successfully at ${INSTALL_DIR}/cybex-pulse"
     else
         log_warning "Wrapper script not found at expected location. It might be in a different path."
+    fi
+    
+    # Check if installation directory has git repository
+    if [ -d "${INSTALL_DIR}/.git" ]; then
+        log_success "Git repository verified at ${INSTALL_DIR}"
+    else
+        log_warning "Git repository not found at ${INSTALL_DIR}. Auto-updates may not work correctly."
     fi
     
     # Check service installation
@@ -1252,7 +1279,7 @@ verify_installation() {
 
 # Display completion message
 print_completion() {
-    INSTALL_DIR=$(pwd)
+    # Installation directory is already set globally, no need to overwrite it
     
     # Run verification checks
     verify_installation
@@ -1466,19 +1493,22 @@ main() {
     # Step 1: Detect distribution
     detect_distribution
     
-    # Step 2: Install system dependencies
+    # Step 2: Set up installation directories
+    set_install_directories
+    
+    # Step 3: Install system dependencies
     install_dependencies
     
-    # Step 3: Install packages via system package manager
+    # Step 4: Install packages via system package manager
     install_system_packages
     
-    # Step 4: Clone repository
+    # Step 5: Clone repository to correct location
     clone_repository
     
-    # Step 5: Create wrapper script
+    # Step 6: Create wrapper script
     create_wrapper_script
     
-    # Step 6: Create systemd service (unless --no-service is specified)
+    # Step 7: Create systemd service (unless --no-service is specified)
     if [ "$NO_SERVICE" = "false" ]; then
         create_service
     else

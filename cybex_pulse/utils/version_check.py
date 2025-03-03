@@ -44,9 +44,15 @@ class UpdateChecker:
             str: Current commit hash or None if an error occurred
         """
         try:
-            # First check if we're in a git repository
+            # Get expected git repository location (always at /opt/pulse)
+            repo_dir = '/opt/pulse'
+            if not os.path.exists(repo_dir):
+                # Fall back to try relative path resolution if not at standard location
+                repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+            
+            # Check if we're in a git repository - specify the repo directory explicitly
             repo_check = subprocess.run(
-                ['git', 'rev-parse', '--is-inside-work-tree'],
+                ['git', '-C', repo_dir, 'rev-parse', '--is-inside-work-tree'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -61,9 +67,9 @@ class UpdateChecker:
                     return f"install-{int(os.path.getmtime(script_path))}"
                 return "unknown"
                 
-            # Run git rev-parse to get current commit hash
+            # Run git rev-parse to get current commit hash - specify the repo directory explicitly
             result = subprocess.run(
-                ['git', 'rev-parse', 'HEAD'],
+                ['git', '-C', repo_dir, 'rev-parse', 'HEAD'],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -142,9 +148,15 @@ class UpdateChecker:
                 return False, error_msg
 
         try:
+            # Get expected git repository location (always at /opt/pulse)
+            repo_dir = '/opt/pulse'
+            if not os.path.exists(repo_dir):
+                # Fall back to try relative path resolution if not at standard location
+                repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+            
             # First check if we're in a git repository
             repo_check = subprocess.run(
-                ['git', 'rev-parse', '--is-inside-work-tree'],
+                ['git', '-C', repo_dir, 'rev-parse', '--is-inside-work-tree'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -158,7 +170,7 @@ class UpdateChecker:
             
             # Run git pull to update
             result = subprocess.run(
-                ['git', 'pull'],
+                ['git', '-C', repo_dir, 'pull'],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -185,9 +197,29 @@ class UpdateChecker:
         This function uses different methods based on the platform.
         """
         try:
-            # Get the path to the current script
-            current_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../pulse"))
+            # Try multiple paths to find the executable
+            possible_paths = [
+                # Standard installation path
+                "/usr/local/bin/cybex-pulse",
+                # Legacy path in installation directory
+                os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../cybex-pulse")),
+                # Compatibility path
+                "/opt/cybex-pulse",
+                # Older versions used pulse filename
+                os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../pulse"))
+            ]
             
+            # Find the first existing executable
+            current_script = None
+            for path in possible_paths:
+                if os.path.exists(path) and os.access(path, os.X_OK):
+                    current_script = path
+                    break
+            
+            if not current_script:
+                self.logger.error("Could not find application executable for restart")
+                return
+                
             # Determine platform and restart accordingly
             system = platform.system().lower()
             
