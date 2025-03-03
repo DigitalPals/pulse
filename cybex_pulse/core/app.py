@@ -321,15 +321,17 @@ class CybexPulseApp:
         # Shutdown web server if it exists
         if self.web_server:
             try:
+                self.logger.info("Shutting down web server...")
                 self.web_server.shutdown()
             except Exception as e:
                 self.logger.error(f"Error shutting down web server: {e}")
         
-        # Wait for threads to complete with a timeout
+        # Wait for threads to complete with a longer timeout
         for thread in self.threads:
             if thread.is_alive():
                 self.logger.info(f"Waiting for thread {thread.name} to terminate...")
-                thread.join(timeout=1.0)
+                # Increase timeout to 5 seconds to give threads more time to terminate
+                thread.join(timeout=5.0)
                 if thread.is_alive():
                     self.logger.warning(f"Thread {thread.name} did not terminate gracefully")
         
@@ -396,6 +398,11 @@ class CybexPulseApp:
                 # Get interval from config
                 interval = self.config.get("monitoring", "internet_health", {}).get("interval", 3600)
                 
+                # Check for stop event before starting a potentially long-running test
+                if stop_event.is_set() or self.stop_event.is_set():
+                    self.logger.info("Stop event detected before speed test, exiting health check thread")
+                    break
+                
                 # Run speed test
                 self.logger.info("Running internet speed test")
                 
@@ -403,29 +410,52 @@ class CybexPulseApp:
                     # Use the command line tool
                     import json
                     import subprocess
+                    import threading
                     
-                    max_retries = 3
+                    max_retries = 2  # Reduced from 3 to 2
                     retry_count = 0
                     success = False
+                    speedtest_process = None
                     
-                    while retry_count < max_retries and not success:
+                    # Create a function to kill the process if it takes too long
+                    def kill_process_on_timeout(proc, timeout):
+                        timer = threading.Timer(timeout, lambda p: p.kill() if p.poll() is None else None, [proc])
+                        try:
+                            timer.start()
+                            proc.wait()
+                        finally:
+                            timer.cancel()
+                    
+                    while retry_count < max_retries and not success and not stop_event.is_set() and not self.stop_event.is_set():
                         try:
                             # Run speedtest-cli with JSON output and additional options
                             self.logger.info(f"Running speedtest-cli (attempt {retry_count + 1}/{max_retries})")
-                            result = subprocess.run(
+                            
+                            # Use Popen instead of run to have better control over the process
+                            speedtest_process = subprocess.Popen(
                                 ['speedtest-cli', '--json', '--secure'],  # Added --secure to use HTTPS
-                                check=False,  # Don't raise exception on non-zero exit
-                                capture_output=True,
-                                text=True,
-                                timeout=120  # Increased timeout
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True
                             )
                             
+                            # Start a thread to kill the process if it takes too long
+                            kill_thread = threading.Thread(
+                                target=kill_process_on_timeout,
+                                args=(speedtest_process, 90),  # 90 second timeout
+                                daemon=True
+                            )
+                            kill_thread.start()
+                            
+                            # Get the output
+                            stdout, stderr = speedtest_process.communicate()
+                            
                             # Check if command was successful
-                            if result.returncode != 0:
-                                raise subprocess.SubprocessError(f"Command returned non-zero exit status {result.returncode}. stderr: {result.stderr}")
+                            if speedtest_process.returncode != 0:
+                                raise subprocess.SubprocessError(f"Command returned non-zero exit status {speedtest_process.returncode}. stderr: {stderr}")
                             
                             # Parse JSON output
-                            data = json.loads(result.stdout)
+                            data = json.loads(stdout)
                             
                             # Extract metrics
                             download_speed = data['download'] / 1_000_000  # Convert to Mbps
@@ -442,10 +472,15 @@ class CybexPulseApp:
                             retry_count += 1
                             self.logger.warning(f"Error running speedtest-cli (attempt {retry_count}/{max_retries}): {e}")
                             
+                            # Check if we need to terminate due to stop event
+                            if stop_event.is_set() or self.stop_event.is_set():
+                                self.logger.info("Stop event detected during speedtest, exiting health check thread")
+                                break
+                                
                             if retry_count < max_retries:
                                 # Wait before retrying
-                                self.logger.info(f"Waiting 30 seconds before retry...")
-                                self._sleep_with_check(30, stop_event)
+                                self.logger.info(f"Waiting 15 seconds before retry...")  # Reduced from 30 to 15
+                                self._sleep_with_check(15, stop_event)
                             else:
                                 self.logger.error(f"Failed to run speedtest-cli after {max_retries} attempts. Last error: {e}")
                                 # Record a failed speed test in the database
@@ -459,6 +494,19 @@ class CybexPulseApp:
                                 )
                                 self._sleep_with_check(60, stop_event)
                                 continue
+                        finally:
+                            # Make sure the process is terminated if it's still running
+                            if speedtest_process and speedtest_process.poll() is None:
+                                try:
+                                    speedtest_process.terminate()
+                                    # Give it a moment to terminate gracefully
+                                    import time
+                                    time.sleep(0.5)
+                                    # Force kill if still running
+                                    if speedtest_process.poll() is None:
+                                        speedtest_process.kill()
+                                except Exception as e:
+                                    self.logger.warning(f"Error terminating speedtest process: {e}")
                 else:
                     # Use the Python module
                     import speedtest
@@ -475,6 +523,11 @@ class CybexPulseApp:
                     # Get connection metadata
                     isp = st.results.client.get("isp", "Unknown")
                     server_name = st.results.server.get("name", "Unknown")
+                
+                # Check for stop event again before database operations
+                if stop_event.is_set() or self.stop_event.is_set():
+                    self.logger.info("Stop event detected after speed test, exiting health check thread")
+                    break
                 
                 # Log results
                 self.logger.info(f"Speed test results: {download_speed:.2f}/{upload_speed:.2f} Mbps, {ping:.2f} ms")

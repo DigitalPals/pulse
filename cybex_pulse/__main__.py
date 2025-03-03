@@ -139,23 +139,37 @@ def main():
     # Set up signal handler for graceful termination
     def signal_handler(sig, frame):
         logger.info("Application terminated by user (SIGINT/SIGTERM)")
-        app.stop_event.set()  # Signal threads to stop
-        app.cleanup()
         
-        # Reset terminal to canonical mode
-        import termios
-        import atexit
-        import os
+        # Use a more robust termination approach
         try:
-            # Reset terminal to initial state
-            fd = sys.stdin.fileno()
-            mode = termios.tcgetattr(fd)
-            mode[3] = mode[3] | termios.ECHO | termios.ICANON
-            termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
-            os.system('stty sane')  # Additional terminal reset
+            # First set the stop event to signal threads to stop gracefully
+            app.stop_event.set()
+            
+            # Give threads a short time to respond to the stop event
+            import time
+            time.sleep(0.5)
+            
+            # Then call cleanup to properly terminate resources
+            app.cleanup()
+            
+            # Reset terminal to canonical mode
+            import termios
+            import os
+            try:
+                # Reset terminal to initial state
+                fd = sys.stdin.fileno()
+                mode = termios.tcgetattr(fd)
+                mode[3] = mode[3] | termios.ECHO | termios.ICANON
+                termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
+                os.system('stty sane')  # Additional terminal reset
+            except Exception as e:
+                logger.debug(f"Error resetting terminal: {e}")
+                
+            logger.info("Application shutdown complete")
         except Exception as e:
-            logger.debug(f"Error resetting terminal: {e}")
-        
+            logger.error(f"Error during shutdown: {e}")
+            
+        # Force exit if cleanup doesn't complete
         sys.exit(0)
     
     # Register signal handlers

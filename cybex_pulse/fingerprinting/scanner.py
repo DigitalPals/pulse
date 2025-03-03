@@ -498,7 +498,7 @@ class DeviceFingerprinter:
         
         return results
 
-    def fingerprint_network(self, devices: List[Dict[str, str]], 
+    def fingerprint_network(self, devices: List[Dict[str, str]],
                          force_scan: bool = False) -> List[Dict[str, Any]]:
         """
         Fingerprint multiple devices in a network.
@@ -526,20 +526,35 @@ class DeviceFingerprinter:
             
         logger.info(f"Fingerprinting {len(filtered_devices)} devices after filtering")
         
-        # Process devices in parallel
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            futures = {
-                executor.submit(self.fingerprint_device, device['ip_address'], device['mac_address']): device
-                for device in filtered_devices
-            }
+        # Limit the number of devices processed in a single batch to avoid resource exhaustion
+        batch_size = min(5, len(filtered_devices))
+        logger.info(f"Processing devices in batches of {batch_size}")
+        
+        # Process devices in smaller batches to reduce resource usage
+        for i in range(0, len(filtered_devices), batch_size):
+            batch = filtered_devices[i:i+batch_size]
+            logger.info(f"Processing batch {i//batch_size + 1} with {len(batch)} devices")
             
-            for future in futures:
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    device = futures[future]
-                    logger.error(f"Error fingerprinting device {device['ip_address']}: {str(e)}")
+            # Process batch in parallel
+            with ThreadPoolExecutor(max_workers=min(self.max_threads, batch_size)) as executor:
+                futures = {
+                    executor.submit(self.fingerprint_device, device['ip_address'], device['mac_address']): device
+                    for device in batch
+                }
+                
+                # Use as_completed to process results as they come in
+                import concurrent.futures
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        result = future.result()
+                        results.append(result)
+                    except Exception as e:
+                        device = futures[future]
+                        logger.error(f"Error fingerprinting device {device['ip_address']}: {str(e)}")
+            
+            # Add a small delay between batches to allow system to recover
+            import time
+            time.sleep(1)
         
         return results
     

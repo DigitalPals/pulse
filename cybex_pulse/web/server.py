@@ -108,7 +108,31 @@ class WebServer:
         """Shutdown the web server gracefully."""
         if self.server:
             self.logger.info("Shutting down web server gracefully")
+            try:
+                # Create a separate thread for shutdown to avoid blocking
+                import threading
+                shutdown_thread = threading.Thread(
+                    target=self._shutdown_server,
+                    name="WebServerShutdown",
+                    daemon=True
+                )
+                shutdown_thread.start()
+                
+                # Wait for a short time for the shutdown to complete
+                shutdown_thread.join(timeout=3.0)
+                
+                if shutdown_thread.is_alive():
+                    self.logger.warning("Web server shutdown is taking longer than expected, continuing with application shutdown")
+            except Exception as e:
+                self.logger.error(f"Error during web server shutdown: {e}")
+    
+    def _shutdown_server(self) -> None:
+        """Internal method to shutdown the server in a separate thread."""
+        try:
             self.server.shutdown()
+            self.logger.info("Web server shutdown completed")
+        except Exception as e:
+            self.logger.error(f"Error in web server shutdown thread: {e}")
     
     def _register_routes(self) -> None:
         """Register all Flask routes."""
