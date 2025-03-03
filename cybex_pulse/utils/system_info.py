@@ -7,6 +7,11 @@ import platform
 import time
 from typing import Dict, Any, List, Tuple
 
+# Cache for CPU model information to avoid repeated lookups
+_cpu_model_cache = None
+_cpu_count_cache = None
+_physical_cores_cache = None
+
 def get_cpu_info() -> Dict[str, Any]:
     """
     Get CPU information.
@@ -14,17 +19,24 @@ def get_cpu_info() -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Dictionary with CPU information
     """
+    global _cpu_model_cache, _cpu_count_cache, _physical_cores_cache
+    
     try:
-        # Get CPU usage percentage
-        cpu_percent = psutil.cpu_percent(interval=1)
+        # Get CPU usage percentage without blocking (interval=0)
+        # This returns the usage since the last call, or 0 on first call
+        cpu_percent = psutil.cpu_percent(interval=0)
         
-        # Get CPU count
-        cpu_count = psutil.cpu_count(logical=True) or 1  # Default to 1 if None
-        physical_cores = psutil.cpu_count(logical=False) or 1  # Default to 1 if None
+        # Cache CPU count and cores to avoid repeated calls
+        if _cpu_count_cache is None:
+            _cpu_count_cache = psutil.cpu_count(logical=True) or 1
+        cpu_count = _cpu_count_cache
+        
+        if _physical_cores_cache is None:
+            _physical_cores_cache = psutil.cpu_count(logical=False) or 1
+        physical_cores = _physical_cores_cache
         
         # Calculate normalized CPU percentage based on number of cores
-        # This gives a more accurate representation in virtualized environments
-        normalized_percent = min(100, cpu_percent / cpu_count * 100) if cpu_count > 0 else cpu_percent
+        normalized_percent = min(100, cpu_percent / cpu_count * 100) if cpu_count > 0 and cpu_percent > 0 else cpu_percent
         
         # Get CPU frequency
         cpu_freq = psutil.cpu_freq()
@@ -38,25 +50,29 @@ def get_cpu_info() -> Dict[str, Any]:
         if load_avg:
             normalized_load_avg = [round(load / cpu_count * 100, 2) for load in load_avg]
         
-        # Get CPU model name
-        cpu_info = {}
-        try:
-            if platform.system() == "Linux":
-                with open('/proc/cpuinfo', 'r') as f:
-                    for line in f:
-                        if line.strip():
-                            if line.rstrip('\n').startswith('model name'):
-                                model_name = line.rstrip('\n').split(':')[1].strip()
-                                cpu_info['model'] = model_name
-                                break
-            elif platform.system() == "Darwin":  # macOS
-                import subprocess
-                output = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
-                cpu_info['model'] = output
-            else:
-                cpu_info['model'] = platform.processor()
-        except Exception as e:
-            cpu_info['model'] = f"Unknown (Error: {str(e)})"
+        # Get CPU model name (use cached value if available)
+        if _cpu_model_cache is None:
+            try:
+                if platform.system() == "Linux":
+                    with open('/proc/cpuinfo', 'r') as f:
+                        for line in f:
+                            if line.strip():
+                                if line.rstrip('\n').startswith('model name'):
+                                    model_name = line.rstrip('\n').split(':')[1].strip()
+                                    _cpu_model_cache = model_name
+                                    break
+                elif platform.system() == "Darwin":  # macOS
+                    import subprocess
+                    output = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
+                    _cpu_model_cache = output
+                else:
+                    _cpu_model_cache = platform.processor()
+                
+                # If we couldn't determine the model, use a default
+                if not _cpu_model_cache:
+                    _cpu_model_cache = platform.processor() or "Unknown CPU"
+            except Exception as e:
+                _cpu_model_cache = f"Unknown (Error: {str(e)})"
         
         return {
             "percent": normalized_percent,  # Use normalized percentage
@@ -66,7 +82,7 @@ def get_cpu_info() -> Dict[str, Any]:
             "current_freq": current_freq,
             "load_avg": load_avg,
             "normalized_load_avg": normalized_load_avg,  # Add normalized load average
-            "model": cpu_info.get('model', platform.processor())
+            "model": _cpu_model_cache
         }
     except Exception as e:
         return {
@@ -130,6 +146,11 @@ def get_disk_info() -> Dict[str, Any]:
             "error": str(e)
         }
 
+# Cache for network interfaces to avoid repeated lookups
+_network_interfaces_cache = None
+_last_interfaces_update = 0
+_INTERFACES_CACHE_TTL = 60  # Cache network interfaces for 60 seconds
+
 def get_network_info() -> Dict[str, Any]:
     """
     Get network information.
@@ -137,27 +158,39 @@ def get_network_info() -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Dictionary with network information
     """
+    global _network_interfaces_cache, _last_interfaces_update
+    
     try:
         # Get network I/O statistics
         net_io = psutil.net_io_counters()
         
-        # Get network connections count
-        connections = len(psutil.net_connections())
+        # Skip the expensive network connections count for initial page load
+        # This will be updated via the periodic refresh
+        connections = 0
         
-        # Get network interfaces
-        interfaces = []
-        for interface, addrs in psutil.net_if_addrs().items():
-            for addr in addrs:
-                if addr.family == psutil.AF_LINK:  # MAC address
-                    mac = addr.address
-                elif addr.family == 2:  # IPv4
-                    ipv4 = addr.address
+        # Get network interfaces (use cached value if available and not expired)
+        current_time = time.time()
+        if _network_interfaces_cache is None or (current_time - _last_interfaces_update) > _INTERFACES_CACHE_TTL:
+            interfaces = []
+            for interface, addrs in psutil.net_if_addrs().items():
+                mac = None
+                ipv4 = None
+                
+                for addr in addrs:
+                    if addr.family == psutil.AF_LINK:  # MAC address
+                        mac = addr.address
+                    elif addr.family == 2:  # IPv4
+                        ipv4 = addr.address
+                
+                if ipv4:  # Only add interfaces with IPv4 addresses
                     interfaces.append({
                         "name": interface,
-                        "mac": mac if 'mac' in locals() else None,
+                        "mac": mac,
                         "ipv4": ipv4
                     })
-                    break
+            
+            _network_interfaces_cache = interfaces
+            _last_interfaces_update = current_time
         
         return {
             "bytes_sent": net_io.bytes_sent,
@@ -165,7 +198,7 @@ def get_network_info() -> Dict[str, Any]:
             "packets_sent": net_io.packets_sent,
             "packets_recv": net_io.packets_recv,
             "connections": connections,
-            "interfaces": interfaces
+            "interfaces": _network_interfaces_cache
         }
     except Exception as e:
         return {

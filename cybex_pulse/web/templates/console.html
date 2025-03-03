@@ -19,7 +19,7 @@
                         <h4>CPU load</h4>
                         <div class="stat-value" id="cpu-usage">{{ system_info.cpu.normalized_load_avg[0]|int if system_info.cpu.normalized_load_avg else system_info.cpu.percent|int }}%</div>
                         <div class="progress-container">
-                            <div class="progress-bar" id="cpu-progress" style="width: {{ system_info.cpu.normalized_load_avg[0]|int if system_info.cpu.normalized_load_avg else system_info.cpu.percent|int }}%;"></div>
+                            <div class="progress-bar" id="cpu-progress" style="width: {{ system_info.cpu.normalized_load_avg[0]|int if system_info.cpu.normalized_load_avg else system_info.cpu.percent|int }}%"></div>
                         </div>
                         <div class="stat-detail">
                             <small>{{ system_info.cpu.count }} cores | {{ system_info.cpu.model }}</small>
@@ -32,7 +32,7 @@
                         <h4>Memory usage</h4>
                         <div class="stat-value" id="memory-usage">{{ system_info.memory.percent|int }}%</div>
                         <div class="progress-container">
-                            <div class="progress-bar" id="memory-progress" style="width: {{ system_info.memory.percent|int }}%;"></div>
+                            <div class="progress-bar" id="memory-progress" style="width: {{ system_info.memory.percent|int }}%"></div>
                         </div>
                         <div class="stat-detail">
                             <small>{{ (system_info.memory.used / 1024 / 1024 / 1024)|round(1) }} GB / {{ (system_info.memory.total / 1024 / 1024 / 1024)|round(1) }} GB</small>
@@ -45,10 +45,10 @@
                         <h4>Disk usage</h4>
                         <div class="stat-value" id="disk-usage">{{ system_info.disk.percent|int }}%</div>
                         <div class="progress-container">
-                            <div class="progress-bar" id="disk-progress" style="width: {{ system_info.disk.percent|int }}%;"></div>
+                            <div class="progress-bar" id="disk-progress" style="width: {{ system_info.disk.percent|int }}%"></div>
                         </div>
                         <div class="stat-detail">
-                            <small>{{ (system_info.disk.used / 1024 / 1024 / 1024)|round(1) }} GB / {{ (system_info.disk.total / 1024 / 1024 / 1024)|round(1) }} GB</small>
+                            <small>{{ (system_info.disk.used / 1024 / 1024 / 1024)|round(1) if system_info.disk.used else 0 }} GB / {{ (system_info.disk.total / 1024 / 1024 / 1024)|round(1) if system_info.disk.total else 0 }} GB</small>
                         </div>
                     </div>
                 </div>
@@ -278,16 +278,32 @@
     let currentFilter = 'all';
     let searchTerm = '';
     
+    // Deferred loading of console stream
+    let streamInitialized = false;
+    
     // Connect to the console stream when the page loads
     document.addEventListener('DOMContentLoaded', function() {
-        connectToConsoleStream();
+        // Cache DOM elements for better performance
+        cacheDOMElements();
         
-        // Set up periodic refresh of system information
-        setInterval(refreshSystemInfo, 5000); // Refresh every 5 seconds
+        // Immediately fetch complete system info to update the initial placeholders
+        refreshSystemInfo();
+        
+        // Defer connecting to the console stream to prioritize UI rendering
+        setTimeout(function() {
+            connectToConsoleStream();
+            streamInitialized = true;
+        }, 500);
+        
+        // Set up periodic refresh of system information (less frequent)
+        setInterval(refreshSystemInfo, 10000); // Refresh every 10 seconds
         
         // Initialize last updated time
         updateLastUpdated();
         setInterval(updateLastUpdated, 30000); // Update every 30 seconds
+        
+        // Initialize progress bars
+        updateProgressBars();
         
         // Set up event listeners for controls
         document.getElementById('log-level-filter').addEventListener('change', filterLogs);
@@ -348,66 +364,100 @@
         updateTimeElement.className = 'update-time-text ' + className;
     }
     
-    // Function to refresh system information
+    // Cache DOM elements for better performance
+    let domElements = {};
+    
+    // Function to cache DOM elements on page load
+    function cacheDOMElements() {
+        domElements = {
+            cpuUsage: document.getElementById('cpu-usage'),
+            cpuProgress: document.getElementById('cpu-progress'),
+            cpuDetail: document.querySelector('.stat-card:first-child .stat-detail small'),
+            memoryUsage: document.getElementById('memory-usage'),
+            memoryProgress: document.getElementById('memory-progress'),
+            memoryDetail: document.querySelector('.stat-card:nth-child(2) .stat-detail small'),
+            diskUsage: document.getElementById('disk-usage'),
+            diskProgress: document.getElementById('disk-progress'),
+            diskDetail: document.querySelector('.stat-card:nth-child(3) .stat-detail small'),
+            uptimeValue: document.getElementById('uptime-value')
+        };
+    }
+    
+    // Function to refresh system information with debouncing
+    let refreshInProgress = false;
     function refreshSystemInfo() {
+        // Prevent multiple simultaneous requests
+        if (refreshInProgress) return;
+        
+        refreshInProgress = true;
         fetch('/api/system-info')
             .then(response => response.json())
             .then(data => {
                 updateSystemInfoCards(data);
                 updateProgressBars();
                 updateLastUpdated();
+                refreshInProgress = false;
             })
             .catch(error => {
                 console.error('Error fetching system info:', error);
+                refreshInProgress = false;
             });
     }
     
     // Function to update system information cards
     function updateSystemInfoCards(data) {
-        // Update CPU card with 1-minute load average (rounded to integer)
-        const cpuValue = data.cpu.normalized_load_avg ? data.cpu.normalized_load_avg[0] : data.cpu.percent;
-        const cpuRounded = Math.round(cpuValue);
-        document.getElementById('cpu-usage').textContent = cpuRounded + '%';
-        document.getElementById('cpu-progress').style.width = cpuRounded + '%';
-        document.getElementById('cpu-progress').style.setProperty('--value', cpuRounded);
+        // Ensure DOM elements are cached
+        if (!domElements.cpuUsage) {
+            cacheDOMElements();
+        }
         
-        // Update CPU details
-        const cpuDetailElement = document.querySelector('.stat-card:first-child .stat-detail small');
-        if (cpuDetailElement) {
-            cpuDetailElement.textContent = `${data.cpu.count} cores | ${data.cpu.model}`;
+        // Update CPU card with 1-minute load average (rounded to integer)
+        if (data.cpu) {
+            const cpuValue = data.cpu.normalized_load_avg ? data.cpu.normalized_load_avg[0] : data.cpu.percent;
+            const cpuRounded = Math.round(cpuValue);
+            
+            if (domElements.cpuUsage) domElements.cpuUsage.textContent = cpuRounded + '%';
+            if (domElements.cpuProgress) domElements.cpuProgress.style.width = cpuRounded + '%';
+            
+            // Update CPU details
+            if (domElements.cpuDetail && data.cpu.count && data.cpu.model) {
+                domElements.cpuDetail.textContent = `${data.cpu.count} cores | ${data.cpu.model}`;
+            }
         }
         
         // Update Memory card (rounded to integer)
-        const memRounded = Math.round(data.memory.percent);
-        document.getElementById('memory-usage').textContent = memRounded + '%';
-        document.getElementById('memory-progress').style.width = memRounded + '%';
-        document.getElementById('memory-progress').style.setProperty('--value', memRounded);
-        
-        // Update memory details
-        const memDetailElement = document.querySelector('.stat-card:nth-child(2) .stat-detail small');
-        if (memDetailElement) {
-            const usedGB = (data.memory.used / 1024 / 1024 / 1024).toFixed(1);
-            const totalGB = (data.memory.total / 1024 / 1024 / 1024).toFixed(1);
-            memDetailElement.textContent = `${usedGB} GB / ${totalGB} GB`;
+        if (data.memory) {
+            const memRounded = Math.round(data.memory.percent);
+            
+            if (domElements.memoryUsage) domElements.memoryUsage.textContent = memRounded + '%';
+            if (domElements.memoryProgress) domElements.memoryProgress.style.width = memRounded + '%';
+            
+            // Update memory details
+            if (domElements.memoryDetail && data.memory.used && data.memory.total) {
+                const usedGB = (data.memory.used / 1024 / 1024 / 1024).toFixed(1);
+                const totalGB = (data.memory.total / 1024 / 1024 / 1024).toFixed(1);
+                domElements.memoryDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
+            }
         }
         
         // Update Disk card (rounded to integer)
-        const diskRounded = Math.round(data.disk.percent);
-        document.getElementById('disk-usage').textContent = diskRounded + '%';
-        document.getElementById('disk-progress').style.width = diskRounded + '%';
-        document.getElementById('disk-progress').style.setProperty('--value', diskRounded);
-        
-        // Update disk details
-        const diskDetailElement = document.querySelector('.stat-card:nth-child(3) .stat-detail small');
-        if (diskDetailElement) {
-            const usedGB = (data.disk.used / 1024 / 1024 / 1024).toFixed(1);
-            const totalGB = (data.disk.total / 1024 / 1024 / 1024).toFixed(1);
-            diskDetailElement.textContent = `${usedGB} GB / ${totalGB} GB`;
+        if (data.disk) {
+            const diskRounded = Math.round(data.disk.percent);
+            
+            if (domElements.diskUsage) domElements.diskUsage.textContent = diskRounded + '%';
+            if (domElements.diskProgress) domElements.diskProgress.style.width = diskRounded + '%';
+            
+            // Update disk details
+            if (domElements.diskDetail && data.disk.used && data.disk.total) {
+                const usedGB = (data.disk.used / 1024 / 1024 / 1024).toFixed(1);
+                const totalGB = (data.disk.total / 1024 / 1024 / 1024).toFixed(1);
+                domElements.diskDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
+            }
         }
         
         // Update uptime if available
-        if (data.uptime && document.getElementById('uptime-value')) {
-            document.getElementById('uptime-value').textContent = data.uptime.uptime_formatted;
+        if (data.uptime && data.uptime.uptime_formatted && domElements.uptimeValue) {
+            domElements.uptimeValue.textContent = data.uptime.uptime_formatted;
         }
     }
     
@@ -448,7 +498,15 @@
         }
     }
     
+    // Cache DOM elements for console status
+    let consoleStatusElement = null;
+    
     function connectToConsoleStream() {
+        // Cache console status element
+        if (!consoleStatusElement) {
+            consoleStatusElement = document.getElementById('console-status');
+        }
+        
         // Close any existing connection
         if (consoleEventSource) {
             consoleEventSource.close();
@@ -461,56 +519,98 @@
             
             // Handle connection open
             consoleEventSource.onopen = function() {
-                document.getElementById('console-status').textContent = 'Connected';
-                document.getElementById('console-status').className = 'badge badge-success';
+                if (consoleStatusElement) {
+                    consoleStatusElement.textContent = 'Connected';
+                    consoleStatusElement.className = 'badge badge-success';
+                }
                 appendToConsole("Connected to console stream", "info");
             };
             
-            // Handle messages
+            // Handle messages with batching for better performance
+            let messageQueue = [];
+            let processingQueue = false;
+            
             consoleEventSource.addEventListener('message', function(event) {
                 try {
                     const data = JSON.parse(event.data);
-                    appendToConsole(data.message, data.is_error ? "error" : "info");
+                    
+                    // Add message to queue
+                    messageQueue.push({
+                        message: data.message,
+                        type: data.is_error ? "error" : "info"
+                    });
+                    
+                    // Process queue if not already processing
+                    if (!processingQueue) {
+                        processMessageQueue();
+                    }
                 } catch (e) {
                     appendToConsole("Error parsing message: " + e.message, "error");
                 }
             });
+            
+            // Function to process message queue with requestAnimationFrame for better UI performance
+            function processMessageQueue() {
+                processingQueue = true;
+                
+                requestAnimationFrame(function() {
+                    // Process up to 10 messages at a time
+                    const messagesToProcess = messageQueue.splice(0, 10);
+                    
+                    if (messagesToProcess.length > 0) {
+                        // Add messages to console
+                        messagesToProcess.forEach(msg => {
+                            appendToConsole(msg.message, msg.type);
+                        });
+                        
+                        // If more messages in queue, continue processing
+                        if (messageQueue.length > 0) {
+                            processMessageQueue();
+                        } else {
+                            processingQueue = false;
+                        }
+                    } else {
+                        processingQueue = false;
+                    }
+                });
+            }
         } catch (e) {
             appendToConsole("Failed to connect to console stream: " + e.message, "error");
-            document.getElementById('console-status').textContent = 'Connection Failed';
-            document.getElementById('console-status').className = 'badge badge-danger';
+            if (consoleStatusElement) {
+                consoleStatusElement.textContent = 'Connection Failed';
+                consoleStatusElement.className = 'badge badge-danger';
+            }
         }
         
-        // Handle errors
+        // Handle errors - simplified error handling
         consoleEventSource.addEventListener('error', function(event) {
-            try {
-                // Only try to parse data if it exists
-                if (event.data) {
+            if (event.data) {
+                try {
                     const data = JSON.parse(event.data);
                     appendToConsole(data.message, "error");
-                } else {
-                    // Handle case where event.data is undefined
-                    appendToConsole("Error receiving console data from server", "error");
+                } catch (e) {
+                    // Silently ignore parsing errors
                 }
-            } catch (e) {
-                // Handle JSON parsing errors
-                appendToConsole("Error processing console data: " + e.message, "error");
             }
         });
         
-        // Handle connection errors
+        // Handle connection errors with cached DOM element
         consoleEventSource.onerror = function(event) {
             // Check if the connection was never established
             if (consoleEventSource.readyState === 0) {
                 appendToConsole('Failed to connect to console stream. Please try again.', "error");
-                document.getElementById('console-status').textContent = 'Connection Failed';
-                document.getElementById('console-status').className = 'badge badge-danger';
+                if (consoleStatusElement) {
+                    consoleStatusElement.textContent = 'Connection Failed';
+                    consoleStatusElement.className = 'badge badge-danger';
+                }
             }
             // Check if the connection was lost after being established
             else if (consoleEventSource.readyState === 2) {
                 appendToConsole('Connection to console stream lost. Attempting to reconnect...', "warning");
-                document.getElementById('console-status').textContent = 'Disconnected';
-                document.getElementById('console-status').className = 'badge badge-warning';
+                if (consoleStatusElement) {
+                    consoleStatusElement.textContent = 'Disconnected';
+                    consoleStatusElement.className = 'badge badge-warning';
+                }
                 
                 // Try to reconnect after a short delay
                 setTimeout(connectToConsoleStream, 3000);
@@ -518,15 +618,42 @@
         };
     }
     
+    // Cache DOM elements for console output
+    let consoleOutputElement = null;
+    
+    // Cache icons for message types
+    const messageIcons = {
+        'error': '<i class="fas fa-exclamation-triangle"></i> ',
+        'warning': '<i class="fas fa-exclamation-circle"></i> ',
+        'info': '<i class="fas fa-info-circle"></i> '
+    };
+    
+    // Limit the number of messages to prevent memory issues
+    const MAX_MESSAGES = 1000;
+    
     function appendToConsole(message, type) {
-        // Store message in our array
-        const timestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
+        // Get console output element if not cached
+        if (!consoleOutputElement) {
+            consoleOutputElement = document.getElementById('console-output');
+        }
+        
+        // Store message in our array with a more efficient timestamp
+        const now = new Date();
+        const timestamp = now.toISOString().replace('T', ' ').substr(0, 19);
+        
         const messageObj = {
             message: message,
             type: type,
             timestamp: timestamp
         };
+        
+        // Add to messages array with limit check
         allMessages.push(messageObj);
+        
+        // Trim messages array if it gets too large
+        if (allMessages.length > MAX_MESSAGES) {
+            allMessages = allMessages.slice(-MAX_MESSAGES);
+        }
         
         // Check if this message should be displayed based on current filter
         if (shouldDisplayMessage(messageObj)) {
@@ -535,9 +662,13 @@
     }
     
     function addMessageToDOM(messageObj) {
-        const consoleOutput = document.getElementById('console-output');
-        const messageElement = document.createElement('div');
+        // Get console output element if not cached
+        if (!consoleOutputElement) {
+            consoleOutputElement = document.getElementById('console-output');
+        }
         
+        // Create message element
+        const messageElement = document.createElement('div');
         messageElement.className = `console-message ${messageObj.type}`;
         
         // Add timestamp
@@ -547,82 +678,130 @@
         messageElement.appendChild(timestampSpan);
         
         // Add message with appropriate icon
-        let icon = '';
-        if (messageObj.type === 'error') {
-            icon = '<i class="fas fa-exclamation-triangle"></i> ';
-        } else if (messageObj.type === 'warning') {
-            icon = '<i class="fas fa-exclamation-circle"></i> ';
-        } else if (messageObj.type === 'info') {
-            icon = '<i class="fas fa-info-circle"></i> ';
-        }
+        const icon = messageIcons[messageObj.type] || '';
         
         const messageContent = document.createElement('span');
         messageContent.className = 'message-content';
-        messageContent.innerHTML = icon + messageObj.message;
         
         // Highlight search term if present
         if (searchTerm && messageObj.message.toLowerCase().includes(searchTerm.toLowerCase())) {
             const regex = new RegExp(`(${searchTerm})`, 'gi');
             messageContent.innerHTML = icon + messageObj.message.replace(regex, '<span class="highlight">$1</span>');
+        } else {
+            messageContent.innerHTML = icon + messageObj.message;
         }
         
         messageElement.appendChild(messageContent);
-        consoleOutput.appendChild(messageElement);
+        
+        // Append to console output
+        consoleOutputElement.appendChild(messageElement);
+        
+        // Limit the number of DOM elements to prevent browser slowdown
+        if (consoleOutputElement.children.length > MAX_MESSAGES) {
+            // Remove oldest messages
+            while (consoleOutputElement.children.length > MAX_MESSAGES) {
+                consoleOutputElement.removeChild(consoleOutputElement.firstChild);
+            }
+        }
         
         // Auto-scroll to bottom if enabled
         if (autoScroll) {
-            scrollToBottom();
+            // Use requestAnimationFrame for smoother scrolling
+            requestAnimationFrame(scrollToBottom);
         }
     }
     
     function scrollToBottom() {
-        const consoleOutput = document.getElementById('console-output');
-        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        // Use cached element if available
+        if (!consoleOutputElement) {
+            consoleOutputElement = document.getElementById('console-output');
+        }
+        
+        // Use scrollTop for better performance
+        consoleOutputElement.scrollTop = consoleOutputElement.scrollHeight;
     }
     
     function clearConsole() {
-        const consoleOutput = document.getElementById('console-output');
-        consoleOutput.innerHTML = '<div class="console-message text-muted">Console cleared</div>';
+        // Use cached element if available
+        if (!consoleOutputElement) {
+            consoleOutputElement = document.getElementById('console-output');
+        }
+        
+        // Clear console with a single operation
+        consoleOutputElement.innerHTML = '<div class="console-message text-muted">Console cleared</div>';
+        
+        // Reset messages array
         allMessages = [];
     }
     
-    function filterLogs() {
-        const filter = document.getElementById('log-level-filter').value;
-        currentFilter = filter;
+    // Function to refresh the console display based on current filter and search
+    function refreshConsoleDisplay() {
+        // Use cached element if available
+        if (!consoleOutputElement) {
+            consoleOutputElement = document.getElementById('console-output');
+        }
         
         // Clear current display
-        const consoleOutput = document.getElementById('console-output');
-        consoleOutput.innerHTML = '';
+        consoleOutputElement.innerHTML = '';
         
-        // Re-add messages that match the filter
-        allMessages.forEach(msg => {
-            if (shouldDisplayMessage(msg)) {
-                addMessageToDOM(msg);
+        // Re-add messages that match the filter and search
+        // Use a fragment for better performance
+        const fragment = document.createDocumentFragment();
+        
+        // Count how many messages we're displaying
+        let displayCount = 0;
+        
+        // Process messages in reverse order (newest first) up to MAX_MESSAGES
+        for (let i = allMessages.length - 1; i >= 0 && displayCount < MAX_MESSAGES; i--) {
+            if (shouldDisplayMessage(allMessages[i])) {
+                // Create message element directly in the fragment
+                const messageObj = allMessages[i];
+                const messageElement = document.createElement('div');
+                messageElement.className = `console-message ${messageObj.type}`;
+                
+                // Add timestamp
+                const timestampSpan = document.createElement('span');
+                timestampSpan.className = 'timestamp';
+                timestampSpan.textContent = messageObj.timestamp;
+                messageElement.appendChild(timestampSpan);
+                
+                // Add message with appropriate icon
+                const icon = messageIcons[messageObj.type] || '';
+                
+                const messageContent = document.createElement('span');
+                messageContent.className = 'message-content';
+                
+                // Highlight search term if present
+                if (searchTerm && messageObj.message.toLowerCase().includes(searchTerm.toLowerCase())) {
+                    const regex = new RegExp(`(${searchTerm})`, 'gi');
+                    messageContent.innerHTML = icon + messageObj.message.replace(regex, '<span class="highlight">$1</span>');
+                } else {
+                    messageContent.innerHTML = icon + messageObj.message;
+                }
+                
+                messageElement.appendChild(messageContent);
+                fragment.insertBefore(messageElement, fragment.firstChild); // Insert at beginning to maintain chronological order
+                displayCount++;
             }
-        });
-        
-        if (autoScroll) {
-            scrollToBottom();
         }
+        
+        // Add all elements at once
+        consoleOutputElement.appendChild(fragment);
+        
+        // Auto-scroll to bottom if enabled
+        if (autoScroll) {
+            requestAnimationFrame(scrollToBottom);
+        }
+    }
+    
+    function filterLogs() {
+        currentFilter = document.getElementById('log-level-filter').value;
+        refreshConsoleDisplay();
     }
     
     function searchLogs() {
         searchTerm = document.getElementById('console-search').value.trim();
-        
-        // Clear current display
-        const consoleOutput = document.getElementById('console-output');
-        consoleOutput.innerHTML = '';
-        
-        // Re-add messages that match both filter and search
-        allMessages.forEach(msg => {
-            if (shouldDisplayMessage(msg)) {
-                addMessageToDOM(msg);
-            }
-        });
-        
-        if (autoScroll) {
-            scrollToBottom();
-        }
+        refreshConsoleDisplay();
     }
     
     function shouldDisplayMessage(msg) {

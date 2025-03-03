@@ -124,8 +124,28 @@ def register_console_routes(app, server):
     @server.login_required
     def console_page():
         """Display the console page."""
-        # Get system information
-        system_info = get_all_system_info()
+        # Get minimal system information for initial page load
+        # This provides just enough data to render the page, the rest will be loaded via AJAX
+        try:
+            # Only get CPU and memory info for initial load
+            # This avoids the expensive disk and network operations
+            system_info = {
+                "cpu": get_cpu_info(),
+                "memory": get_memory_info(),
+                "disk": {
+                    "percent": 0,  # Placeholder values
+                    "used": 0,
+                    "total": 100
+                }
+            }
+        except Exception as e:
+            server.logger.error(f"Error getting initial system info: {str(e)}")
+            system_info = {
+                "cpu": {"percent": 0, "count": 1, "model": "Unknown"},
+                "memory": {"percent": 0, "used": 0, "total": 100},
+                "disk": {"percent": 0, "used": 0, "total": 100}
+            }
+        
         return server.render_template('console.html', system_info=system_info)
     
     @app.route('/console-stream')
