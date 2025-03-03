@@ -107,69 +107,77 @@
 
 <div class="dashboard-panels">
     <div class="card">
-        <div class="card-header">
-            <h3>Important Devices</h3>
-        </div>
-        <div class="important-devices-list" id="important-devices-container">
-            <table class="important-devices-table">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Device</th>
-                        <th>IP Address</th>
-                        <th>Last Seen</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for device in devices|selectattr('is_important', 'eq', 1)|list %}
-                    <tr>
-                        <td class="device-icon-cell">
-                            <div class="device-icon">
-                                <div class="vendor-icon">
-                                    {{ device.vendor|device_icon(device.device_name)|safe }}
+            <div class="card-header">
+                <h3>Important Devices</h3>
+            </div>
+            <div class="events-table-container">
+                <table class="important-devices-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Device</th>
+                            <th>Status</th>
+                            <th>IP Address</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="important-devices-container">
+                        {% for device in devices|selectattr('is_important', 'eq', 1)|list %}
+                        <tr class="event-row">
+                            <td class="event-icon-cell">
+                                <div class="device-icon">
+                                    <div class="vendor-icon">
+                                        {{ device.vendor|device_icon(device.device_name)|safe }}
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="device-name-container">
-                                <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="device-link">
-                                    <strong class="device-name-truncate" title="{{ device.hostname or device.ip_address }}">{{ device.hostname or device.ip_address }}</strong>
+                            </td>
+                            <td class="event-device-cell">
+                                <div class="device-name-container">
+                                    <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="device-link">
+                                        <strong class="device-name-truncate" title="{{ device.hostname or device.ip_address }}">{{ device.hostname or device.ip_address }}</strong>
+                                    </a>
+                                </div>
+                            </td>
+                            <td class="event-status-cell">
+                                {% if device.last_seen >= now - 300 %}
+                                <span class="device-status-badge status-badge-online">
+                                    <i class="fas fa-circle pulse-dot"></i> Online
+                                </span>
+                                {% else %}
+                                <span class="device-status-badge status-badge-offline">
+                                    <i class="fas fa-circle"></i> Offline
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="event-ip-cell">{{ device.ip_address }}</td>
+                            <td class="event-time-cell">
+                                <span class="event-time" title="{{ device.last_seen|timestamp_to_time }}">
+                                    {{ device.last_seen|timestamp_to_relative_time }}
+                                </span>
+                            </td>
+                            <td class="event-tag-cell">
+                                <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-info-circle"></i> Details
                                 </a>
-                                <div>
-                                    {% if device.last_seen >= now - 300 %}
-                                    <span class="device-status-badge status-badge-online">
-                                        <i class="fas fa-circle pulse-dot"></i> Online
-                                    </span>
-                                    {% else %}
-                                    <span class="device-status-badge status-badge-offline">
-                                        <i class="fas fa-circle"></i> Offline
-                                    </span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </td>
-                        <td class="device-ip-cell">{{ device.ip_address }}</td>
-                        <td class="device-time-cell">{{ device.last_seen|timestamp_to_relative_time }}</td>
-                        <td>
-                            <a href="{{ url_for('device_details', mac_address=device.mac_address) }}" class="btn btn-sm btn-secondary">
-                                <i class="fas fa-info-circle"></i> Details
-                            </a>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="5" class="no-important-devices">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <p>No important devices configured</p>
-                            <a href="{{ url_for('devices') }}" class="btn btn-sm btn-secondary">Go to Devices</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="no-events">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <p>No important devices configured</p>
+                                <a href="{{ url_for('devices') }}" class="btn btn-sm btn-secondary">Go to Devices</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('devices') }}" class="btn btn-secondary">View All Devices</a>
+            </div>
         </div>
-    </div>
 
     <div class="card">
         <div class="card-header">
@@ -535,6 +543,8 @@
                         
                         // Format device information
                         let deviceInfo = `<span class="event-no-device">${event.message}</span>`;
+                        let ipAddress = '';
+                        
                         if (event.details) {
                             try {
                                 const details = JSON.parse(event.details);
@@ -544,7 +554,7 @@
                                         deviceName = `${details.manufacturer} ${details.model}`;
                                     }
                                     deviceInfo = `<a href="/devices/${details.mac}" class="device-name">${deviceName}</a>`;
-                                    const ipAddress = details.ip;
+                                    ipAddress = details.ip || '';
                                 }
                             } catch(e) {
                                 console.error('Error parsing event details:', e);
@@ -555,7 +565,7 @@
                             <tr class="event-row ${eventClass}">
                                 <td class="event-icon-cell">${eventIcon}</td>
                                 <td class="event-device-cell">${deviceInfo}</td>
-                                <td class="event-ip-cell">${details && details.mac ? details.ip : ''}</td>
+                                <td class="event-ip-cell">${ipAddress}</td>
                                 <td class="event-time-cell">
                                     <span class="event-time" title="${formatTimestamp(event.timestamp)}">
                                         ${formatRelativeTime(event.timestamp)}
