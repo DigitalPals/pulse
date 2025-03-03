@@ -1,0 +1,5 @@
+# Ensure line endings are normalized
+* text=auto
+
+# Exclude _version.py from git attributes to allow setuptools_scm to manage it
+cybex_pulse/_version.py export-subst

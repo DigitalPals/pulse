@@ -6,6 +6,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = fh.read().splitlines()
 
+# Note: The version here is just a fallback. The actual version is determined
+# at runtime by the VersionManager in cybex_pulse/utils/version_manager.py
 setup(
     name="cybex-pulse",
     version="0.1.0",

@@ -66,6 +66,7 @@ python-telegram-bot
 speedtest-cli
 python-nmap
 requests
+setuptools_scm
 ```
 
 ### Installation Steps
@@ -82,6 +83,8 @@ cd cybex-pulse
 ```bash
 pip install -r requirements.txt
 ```
+
+The application automatically detects and displays its version at startup.
 
 3. Install system dependencies:
 
@@ -225,6 +228,38 @@ To use Telegram notifications:
 ### Logs
 
 Logs are stored in `~/.cybex_pulse/logs/cybex_pulse.log` and can be helpful for diagnosing issues.
+
+## Versioning
+
+Cybex Pulse uses an automatic versioning system that detects file changes and updates the version number accordingly:
+
+- Version numbers follow the format: `MAJOR.MINOR.PATCH[-dev]`
+- For development versions, the format includes `-dev` suffix: `0.1.2-dev`
+- The version number automatically increments when file changes are detected
+
+The application checks for changes at startup and automatically updates the version if needed. This happens completely automatically without any manual steps required.
+
+### How It Works
+
+1. When the application starts, it computes hashes of all Python files in the project
+2. It compares these hashes with the previously stored hashes
+3. If any files have changed, it increments the version number
+4. The new version and file hashes are saved for future comparison
+
+This approach ensures that each time you modify the code and run the application, the version number will automatically increment to reflect the changes.
+
+### Checking the Current Version
+
+You can check the current version by running:
+
+```bash
+python cybex_pulse/get_version.py
+```
+
+Or by checking the application logs at startup. The version information includes:
+- The current version number
+- When the version was last updated
+- Whether this is a development version
 
 ## Contributing
 

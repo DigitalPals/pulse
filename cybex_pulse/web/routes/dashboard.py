@@ -29,9 +29,17 @@ def register_dashboard_routes(app, server):
                 if update_checker.current_commit_hash.startswith("install-") or update_checker.current_commit_hash == "unknown":
                     update_disabled = True
             
+        # Format the last modified date if available
+        version_last_modified = None
+        if hasattr(server, 'version_last_modified') and server.version_last_modified:
+            from datetime import datetime
+            version_last_modified = datetime.fromtimestamp(server.version_last_modified).strftime('%Y-%m-%d %H:%M:%S')
+            
         return {
             'config_obj': server.config,
             'version': server.version,
+            'is_dev_version': getattr(server, 'is_dev_version', False),
+            'version_last_modified': version_last_modified,
             'update_available': update_available,
             'update_disabled': update_disabled
         }

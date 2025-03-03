@@ -13,6 +13,7 @@ from cybex_pulse.core.setup_wizard import SetupWizard
 from cybex_pulse.core.app import CybexPulseApp
 from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
+from cybex_pulse.utils.version_manager import version_manager
 
 def setup_logging():
     """Configure application logging."""
@@ -68,7 +69,26 @@ def main():
     from pathlib import Path
     
     logger = setup_logging()
-    logger.info("Starting Cybex Pulse v%s", __import__("cybex_pulse").__version__)
+    
+    # Get version information
+    try:
+        version = version_manager.get_version()
+        is_dev = version_manager.is_development_version()
+        last_modified = version_manager.get_last_modified()
+        
+        logger.info("Starting Cybex Pulse v%s", version)
+        
+        if last_modified:
+            from datetime import datetime
+            modified_date = datetime.fromtimestamp(last_modified).strftime('%Y-%m-%d %H:%M:%S')
+            logger.info("Version last updated: %s", modified_date)
+        
+        if is_dev:
+            logger.info("This is a development version")
+    except Exception as e:
+        # If there's an error with version detection, log it but continue
+        logger.error(f"Error determining version: {e}")
+        logger.info("Starting Cybex Pulse")
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Cybex Pulse - Home Network Monitoring")

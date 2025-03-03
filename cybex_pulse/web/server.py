@@ -12,6 +12,7 @@ from cybex_pulse import __version__
 from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
 from cybex_pulse.utils.system_check import check_required_tools, get_installation_instructions
+from cybex_pulse.utils.version_manager import version_manager
 from cybex_pulse.web.utils.network import get_local_ip
 from cybex_pulse.web.filters import register_filters
 from cybex_pulse.web.routes import register_routes
@@ -35,7 +36,9 @@ class WebServer:
         self.logger = logger
         self.main_app = main_app  # Reference to main application for callbacks
         self.server = None  # Will hold the Flask server instance
-        self.version = __version__  # Store version for template access
+        self.version = version_manager.get_version()  # Get version from version manager
+        self.is_dev_version = version_manager.is_development_version()
+        self.version_last_modified = version_manager.get_last_modified()
         
         # Check required tools
         self.tool_status = check_required_tools()

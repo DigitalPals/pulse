@@ -91,7 +91,11 @@
                 </ul>
                 <div class="sidebar-footer">
                     <div class="copyright">
-                        <span>© Cybex Pulse </span>
+                        <span>© Cybex Pulse</span>
+                        <div class="version-info">
+                            <span class="version-number">v{{ version }}</span>
+                            {% if is_dev_version %}<span class="dev-badge">dev</span>{% endif %}
+                        </div>
                         <a href="#" id="update-link" class="update-status {% if not update_available %}up-to-date{% endif %} {% if update_disabled %}disabled{% endif %}">
                             {% if update_disabled %}
                                 Updates Disabled

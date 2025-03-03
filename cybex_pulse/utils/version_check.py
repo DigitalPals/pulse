@@ -15,6 +15,8 @@ from typing import Dict, Optional, Tuple, Union
 
 import requests
 
+from cybex_pulse.utils.version_manager import version_manager
+
 logger = logging.getLogger(__name__)
 
 class UpdateChecker:
@@ -33,7 +35,9 @@ class UpdateChecker:
         self.stop_event = threading.Event()
         self.update_available = False
         self.latest_commit_hash = None
-        self.current_commit_hash = None
+        self.current_commit_hash = self.get_current_commit_hash()  # Use our own method instead
+        self.current_version = version_manager.get_version()
+        self.latest_version = None
         self.update_error = None
         self.last_checked = None
     
@@ -84,24 +88,47 @@ class UpdateChecker:
                 return f"install-{int(os.path.getmtime(script_path))}"
             return "unknown"
     
-    def get_latest_commit_hash(self) -> Optional[str]:
-        """Get the latest commit hash from GitHub.
+    def get_latest_commit_hash(self) -> Tuple[Optional[str], Optional[str]]:
+        """Get the latest commit hash and version from GitHub.
         
         Returns:
-            str: Latest commit hash from GitHub or None if an error occurred
+            tuple: (latest_commit_hash, latest_version) or (None, None) if an error occurred
         """
         try:
             # Use GitHub API to get latest commit hash
-            response = requests.get(
+            commit_response = requests.get(
                 'https://api.github.com/repos/DigitalPals/pulse/commits/main',
                 timeout=10
             )
-            response.raise_for_status()
-            data = response.json()
-            return data.get('sha')
+            commit_response.raise_for_status()
+            commit_data = commit_response.json()
+            latest_hash = commit_data.get('sha')
+            
+            # Try to get latest version from tags
+            try:
+                tags_response = requests.get(
+                    'https://api.github.com/repos/DigitalPals/pulse/tags',
+                    timeout=10
+                )
+                tags_response.raise_for_status()
+                tags_data = tags_response.json()
+                
+                if tags_data and len(tags_data) > 0:
+                    # Get the most recent tag
+                    latest_tag = tags_data[0].get('name', '')
+                    # Remove 'v' prefix if present
+                    latest_version = latest_tag[1:] if latest_tag.startswith('v') else latest_tag
+                else:
+                    # If no tags, use commit hash as version
+                    latest_version = latest_hash[:7]
+            except (requests.RequestException, json.JSONDecodeError) as e:
+                self.logger.warning(f"Failed to get latest tag from GitHub: {e}")
+                latest_version = latest_hash[:7] if latest_hash else None
+                
+            return latest_hash, latest_version
         except (requests.RequestException, json.JSONDecodeError) as e:
             self.logger.error(f"Failed to get latest commit hash from GitHub: {e}")
-            return None
+            return None, None
     
     def check_for_updates(self) -> Tuple[bool, Optional[str]]:
         """Check if updates are available.
@@ -112,7 +139,7 @@ class UpdateChecker:
         self.update_error = None
         self.last_checked = time.time()
         
-        # Get current commit hash
+        # Get current commit hash for comparison
         self.current_commit_hash = self.get_current_commit_hash()
         if not self.current_commit_hash:
             self.update_error = "Failed to get current commit hash"
@@ -124,14 +151,23 @@ class UpdateChecker:
             self.update_available = False
             return False, None
         
-        # Get latest commit hash
-        self.latest_commit_hash = self.get_latest_commit_hash()
-        if not self.latest_commit_hash:
+        # Get latest commit hash and version
+        result = self.get_latest_commit_hash()
+        if not result[0]:  # First element is commit hash
             self.update_error = "Failed to get latest commit hash from GitHub"
             return False, self.update_error
+            
+        self.latest_commit_hash, self.latest_version = result
         
         # Compare hashes
         self.update_available = self.current_commit_hash != self.latest_commit_hash
+        
+        # Log version information
+        self.logger.info(f"Current version: {self.current_version}")
+        if self.latest_version:
+            self.logger.info(f"Latest version available: {self.latest_version}")
+        self.logger.info(f"Update available: {self.update_available}")
+        
         return self.update_available, None
     
     def update_application(self, progress_callback=None) -> Tuple[bool, Optional[str]]:
