@@ -143,11 +143,11 @@ def main():
         # Use a more robust termination approach
         try:
             # First set the stop event to signal threads to stop gracefully
-            app.stop_event.set()
+            app.thread_manager.global_stop_event.set()
             
             # Give threads a short time to respond to the stop event
             import time
-            import sys
+            import sys  # Import sys module locally to ensure it's available
             time.sleep(0.5)
             
             # Then call cleanup to properly terminate resources
