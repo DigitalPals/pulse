@@ -319,6 +319,10 @@ class UpdateChecker:
         This function uses different methods based on the platform.
         """
         try:
+            # Enable more verbose logging
+            self.logger.setLevel(logging.DEBUG)
+            self.logger.debug("Starting restart process with detailed logging")
+            
             # Try multiple paths to find the executable
             possible_paths = [
                 # Standard installation path
@@ -331,16 +335,69 @@ class UpdateChecker:
                 os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../pulse"))
             ]
             
+            # Log all possible paths
+            self.logger.debug(f"Checking possible executable paths: {possible_paths}")
+            
             # Find the first existing executable
             current_script = None
             for path in possible_paths:
-                if os.path.exists(path) and os.access(path, os.X_OK):
-                    current_script = path
-                    break
+                self.logger.debug(f"Checking path: {path}")
+                if os.path.exists(path):
+                    self.logger.debug(f"Path exists: {path}")
+                    # Check if it's a file (not a directory) and is executable
+                    if os.path.isfile(path) and os.access(path, os.X_OK):
+                        self.logger.debug(f"Path is a file and is executable: {path}")
+                        current_script = path
+                        break
+                    elif os.path.isdir(path):
+                        self.logger.debug(f"Path is a directory, not a file: {path}")
+                    elif not os.access(path, os.X_OK):
+                        self.logger.debug(f"Path exists but is not executable: {path}")
+                else:
+                    self.logger.debug(f"Path does not exist: {path}")
             
+            # If no executable found in standard paths, check for the pulse script in the root directory
             if not current_script:
-                self.logger.error("Could not find application executable for restart")
-                return
+                self.logger.debug("No executable found in standard paths, checking for pulse script")
+                pulse_script = "/opt/pulse/pulse"
+                self.logger.debug(f"Checking pulse script at: {pulse_script}")
+                
+                if os.path.exists(pulse_script):
+                    self.logger.debug(f"Pulse script exists at: {pulse_script}")
+                    # Check if it's a file and is executable
+                    if os.path.isfile(pulse_script) and os.access(pulse_script, os.X_OK):
+                        self.logger.debug(f"Pulse script is a file and is executable")
+                        current_script = pulse_script
+                        self.logger.info(f"Found pulse script at: {current_script}")
+                    elif os.path.isdir(pulse_script):
+                        self.logger.debug(f"Pulse script path is a directory, not a file")
+                    elif not os.access(pulse_script, os.X_OK):
+                        self.logger.debug(f"Pulse script exists but is not executable")
+                else:
+                    self.logger.debug(f"Pulse script does not exist at: {pulse_script}")
+                
+                # Try to find run_app.py as a fallback
+                if not current_script:
+                    run_app_script = "/opt/pulse/run_app.py"
+                    self.logger.debug(f"Checking run_app.py at: {run_app_script}")
+                    
+                    if os.path.exists(run_app_script):
+                        self.logger.debug(f"run_app.py exists at: {run_app_script}")
+                        # Check if it's a file and is executable
+                        if os.path.isfile(run_app_script) and os.access(run_app_script, os.X_OK):
+                            self.logger.debug(f"run_app.py is a file and is executable")
+                            current_script = run_app_script
+                            self.logger.info(f"Found run_app.py script at: {current_script}")
+                        elif os.path.isdir(run_app_script):
+                            self.logger.debug(f"run_app.py path is a directory, not a file")
+                        elif not os.access(run_app_script, os.X_OK):
+                            self.logger.debug(f"run_app.py exists but is not executable")
+                    else:
+                        self.logger.debug(f"run_app.py does not exist at: {run_app_script}")
+                
+                if not current_script:
+                    self.logger.error("Could not find application executable for restart")
+                    return
                 
             # Determine platform and restart accordingly
             system = platform.system().lower()
@@ -349,20 +406,56 @@ class UpdateChecker:
                 # Use subprocess instead of execv to avoid permission issues
                 self.logger.info(f"Restarting application with: {current_script}")
                 try:
-                    # Try using sudo if available (for handling permission issues)
-                    if os.path.exists("/usr/bin/sudo") and os.access("/usr/bin/sudo", os.X_OK):
-                        self.logger.info("Using sudo to restart application")
-                        # Execute as a bash script if it's the pulse script
-                        if current_script.endswith('/pulse'):
-                            subprocess.Popen(["sudo", "bash", current_script], close_fds=True)
-                        else:
-                            subprocess.Popen(["sudo", current_script], close_fds=True)
+                    # Determine the correct execution method based on the script type
+                    script_basename = os.path.basename(current_script)
+                    self.logger.debug(f"Script basename: {script_basename}")
+                    
+                    # Use a direct approach with the full path to the script
+                    if script_basename == 'pulse':
+                        # For the pulse bash script
+                        self.logger.info("Executing pulse bash script directly")
+                        cmd = ["/bin/bash", current_script]
+                        self.logger.debug(f"Executing command: {cmd} in directory: /opt/pulse")
+                        try:
+                            # Use Popen to start the process without waiting
+                            self.logger.debug("Starting process with Popen")
+                            subprocess.Popen(cmd, cwd="/opt/pulse", close_fds=True)
+                            
+                            # Log success and exit this process
+                            self.logger.info("Successfully started new process, exiting current process")
+                            os._exit(0)
+                        except Exception as e:
+                            self.logger.error(f"Error executing pulse script: {e}")
+                    elif script_basename == 'run_app.py':
+                        # For the Python script
+                        self.logger.info("Executing Python script directly")
+                        cmd = ["/usr/bin/python3", current_script]
+                        self.logger.debug(f"Executing command: {cmd} in directory: /opt/pulse")
+                        try:
+                            # Use Popen to start the process without waiting
+                            self.logger.debug("Starting process with Popen")
+                            subprocess.Popen(cmd, cwd="/opt/pulse", close_fds=True)
+                            
+                            # Log success and exit this process
+                            self.logger.info("Successfully started new process, exiting current process")
+                            os._exit(0)
+                        except Exception as e:
+                            self.logger.error(f"Error executing Python script: {e}")
                     else:
-                        # Fall back to direct execution
-                        if current_script.endswith('/pulse'):
-                            subprocess.Popen(["bash", current_script], close_fds=True)
-                        else:
-                            subprocess.Popen([current_script], close_fds=True)
+                        # For other executables
+                        self.logger.info("Executing application binary directly")
+                        cmd = [current_script]
+                        self.logger.debug(f"Executing command: {cmd}")
+                        try:
+                            # Use Popen to start the process without waiting
+                            self.logger.debug("Starting process with Popen")
+                            subprocess.Popen(cmd, close_fds=True)
+                            
+                            # Log success and exit this process
+                            self.logger.info("Successfully started new process, exiting current process")
+                            os._exit(0)
+                        except Exception as e:
+                            self.logger.error(f"Error executing binary: {e}")
                     
                     # Exit the current process
                     self.logger.info("Exiting current process to complete restart")
