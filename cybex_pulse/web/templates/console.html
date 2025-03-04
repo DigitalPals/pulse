@@ -336,14 +336,50 @@
         // Initialize progress bars
         updateProgressBars();
         
+        // Variables to track user scrolling vs. content additions
+        let lastScrollHeight = 0;
+        let userScrolledUp = false;
+        let scrollTimeout = null;
+        
         // Handle console scrolling to detect manual scroll
         const consoleOutput = document.getElementById('console-output');
+        
+        // Initialize the last scroll height
+        setTimeout(() => {
+            lastScrollHeight = consoleOutput.scrollHeight;
+        }, 500);
+        
         consoleOutput.addEventListener('scroll', function() {
-            // If user scrolls up, disable auto-scroll
-            if (consoleOutput.scrollHeight - consoleOutput.scrollTop > consoleOutput.clientHeight + 50) {
-                if (autoScroll) {
+            // Clear any pending scroll timeout
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            
+            // Calculate how far from the bottom we are
+            const scrollBottom = consoleOutput.scrollHeight - consoleOutput.scrollTop - consoleOutput.clientHeight;
+            
+            // If the scroll height hasn't changed, this is a user-initiated scroll
+            if (consoleOutput.scrollHeight === lastScrollHeight) {
+                // User scrolled up if we're more than 50px from bottom
+                userScrolledUp = scrollBottom > 50;
+                
+                // If user scrolled up, disable auto-scroll
+                if (userScrolledUp && autoScroll) {
                     document.getElementById('autoscroll-toggle').checked = false;
                     autoScroll = false;
+                }
+                
+                // If user scrolled to bottom, re-enable auto-scroll if toggle is checked
+                if (scrollBottom < 10 && !autoScroll && document.getElementById('autoscroll-toggle').checked) {
+                    autoScroll = true;
+                }
+            } else {
+                // Content was added, update the last scroll height
+                lastScrollHeight = consoleOutput.scrollHeight;
+                
+                // If auto-scroll is enabled, scroll to bottom after a short delay
+                if (autoScroll) {
+                    scrollTimeout = setTimeout(scrollToBottom, 50);
                 }
             }
         });
