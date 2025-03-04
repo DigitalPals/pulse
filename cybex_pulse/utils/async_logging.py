@@ -210,7 +210,13 @@ class AsyncLogManager:
             # Stop the main listener
             if self.listener:
                 try:
-                    self.listener.stop()
+                    # Check if the listener has a _thread attribute before stopping
+                    # This prevents the 'NoneType' object has no attribute 'join' error
+                    if hasattr(self.listener, '_thread') and self.listener._thread:
+                        self.listener.stop()
+                    else:
+                        # If there's no thread, just set to None without calling stop()
+                        pass
                 except Exception as e:
                     import sys
                     print(f"Error stopping log listener: {e}", file=sys.stderr)
@@ -220,7 +226,13 @@ class AsyncLogManager:
             # Stop the Werkzeug listener if it exists
             if hasattr(self, 'werkzeug_listener') and self.werkzeug_listener:
                 try:
-                    self.werkzeug_listener.stop()
+                    # Check if the listener has a _thread attribute before stopping
+                    # This prevents the 'NoneType' object has no attribute 'join' error
+                    if hasattr(self.werkzeug_listener, '_thread') and self.werkzeug_listener._thread:
+                        self.werkzeug_listener.stop()
+                    else:
+                        # If there's no thread, just set to None without calling stop()
+                        pass
                 except Exception as e:
                     import sys
                     print(f"Error stopping Werkzeug log listener: {e}", file=sys.stderr)

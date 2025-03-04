@@ -114,44 +114,37 @@ class WebServer:
             host, port, self.app, threaded=True
         )
         self.server.serve_forever()
-        self.server.serve_forever()
     
     def shutdown(self) -> None:
         """Shutdown the web server gracefully."""
-        if self.server:
-            self.logger.info("Shutting down web server gracefully")
-            try:
-                # Create a separate thread for shutdown to avoid blocking
-                import threading
-                shutdown_thread = threading.Thread(
-                    target=self._shutdown_server,
-                    name="WebServerShutdown",
-                    daemon=True
-                )
-                shutdown_thread.start()
-                
-                # Wait for a short time for the shutdown to complete
-                shutdown_thread.join(timeout=3.0)
-                
-                if shutdown_thread.is_alive():
-                    self.logger.warning("Web server shutdown is taking longer than expected, continuing with application shutdown")
-                
-                # Clean up async logging resources for Werkzeug
-                from cybex_pulse.utils.async_logging import async_log_manager
-                if hasattr(async_log_manager, 'werkzeug_listener') and async_log_manager.werkzeug_listener:
-                    self.logger.debug("Cleaning up Werkzeug async logging resources")
-                    async_log_manager.werkzeug_listener.stop()
-                    async_log_manager.werkzeug_logger_patched = False
-            except Exception as e:
-                self.logger.error(f"Error during web server shutdown: {e}")
+        if not self.server:
+            self.logger.debug("No web server instance to shut down")
+            return
+            
+        self.logger.info("Shutting down web server gracefully")
+        try:
+            # Directly shut down the server in the current thread
+            # This is safer than using a separate thread which might cause the NoneType error
+            self._shutdown_server()
+            
+            # Clean up async logging resources for Werkzeug
+            from cybex_pulse.utils.async_logging import async_log_manager
+            if hasattr(async_log_manager, 'werkzeug_listener') and async_log_manager.werkzeug_listener:
+                self.logger.debug("Cleaning up Werkzeug async logging resources")
+                async_log_manager.werkzeug_listener.stop()
+                async_log_manager.werkzeug_logger_patched = False
+        except Exception as e:
+            self.logger.error(f"Error during web server shutdown: {e}")
     
     def _shutdown_server(self) -> None:
-        """Internal method to shutdown the server in a separate thread."""
+        """Internal method to shutdown the server."""
         try:
-            self.server.shutdown()
-            self.logger.info("Web server shutdown completed")
+            if self.server:
+                self.server.shutdown()
+                self.server = None
+                self.logger.info("Web server shutdown completed")
         except Exception as e:
-            self.logger.error(f"Error in web server shutdown thread: {e}")
+            self.logger.error(f"Error in web server shutdown: {e}")
     
     def _register_routes(self) -> None:
         """Register all Flask routes."""
