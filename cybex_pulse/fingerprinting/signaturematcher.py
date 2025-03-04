@@ -26,14 +26,18 @@ class SignatureMatcher:
         if not device_mac or not signature_prefixes:
             return 0.0
             
+        # Optimize by pre-processing the MAC address once
         mac = device_mac.upper().replace(':', '').replace('-', '')
         # Compare only the OUI part (first 6 characters) of the MAC address
         mac_oui = mac[:6]
         
-        for prefix in signature_prefixes:
-            formatted_prefix = prefix.upper().replace(':', '').replace('-', '')[:6]
-            if mac_oui == formatted_prefix:
-                return 1.0
+        # Pre-process all prefixes at once to avoid repeated operations
+        formatted_prefixes = [prefix.upper().replace(':', '').replace('-', '')[:6]
+                             for prefix in signature_prefixes]
+        
+        # Use any() for more efficient iteration
+        if any(mac_oui == prefix for prefix in formatted_prefixes):
+            return 1.0
                 
         return 0.0
     

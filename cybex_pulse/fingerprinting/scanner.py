@@ -118,6 +118,20 @@ class HttpScanner(ScannerMixin):
             'terramaster': ['terramaster', 'tnas']
         }
         self.login_indicators = ['login', 'signin', 'admin', 'password', 'username']
+        # Create a session to reuse connections
+        self.session = requests.Session()
+        # Configure session with default settings
+        self.session.verify = False
+        self.session.headers.update({"User-Agent": "Pulse-NetworkScanner/1.0"})
+        # Configure connection pooling
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=0,
+            pool_block=False
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
         
     def scan(self, ip_address: str) -> Dict[str, Any]:
         """
@@ -131,22 +145,39 @@ class HttpScanner(ScannerMixin):
         """
         headers = {}
         
-        for port in self.common_ports:
-            protocol = "https" if port in [443, 8443, 8843] else "http"
-            url = f"{protocol}://{ip_address}:{port}"
+        # Use ThreadPoolExecutor to scan ports in parallel
+        with ThreadPoolExecutor(max_workers=min(len(self.common_ports), 6)) as executor:
+            # Create a dictionary to map futures to their corresponding ports and protocols
+            futures = {}
             
-            # First try HEAD request
-            head_headers = self._perform_head_request(url)
-            headers.update(head_headers)
+            # Submit tasks for each port
+            for port in self.common_ports:
+                protocol = "https" if port in [443, 8443, 8843] else "http"
+                url = f"{protocol}://{ip_address}:{port}"
                 
-            # Then try GET request
-            content_headers = self._perform_get_request(url)
-            headers.update(content_headers)
+                # Submit HEAD request
+                head_future = executor.submit(self._perform_head_request, url)
+                futures[head_future] = (port, protocol, "head")
                 
-            # For certain devices, check specific paths
-            if protocol == "https" and port in [443, 8443]:
-                path_headers = self._check_management_paths(protocol, ip_address, port)
-                headers.update(path_headers)
+                # Submit GET request
+                get_future = executor.submit(self._perform_get_request, url)
+                futures[get_future] = (port, protocol, "get")
+                
+                # For certain devices, check specific paths
+                if protocol == "https" and port in [443, 8443]:
+                    path_future = executor.submit(self._check_management_paths, protocol, ip_address, port)
+                    futures[path_future] = (port, protocol, "paths")
+            
+            # Process results as they complete
+            for future in futures:
+                try:
+                    result = future.result()
+                    if result:
+                        headers.update(result)
+                except Exception as e:
+                    # Log the error but continue processing other results
+                    port, protocol, req_type = futures[future]
+                    logger.debug(f"Error in HTTP scan for {protocol}://{ip_address}:{port} ({req_type}): {e}")
         
         return {'http_headers': headers}
     
@@ -154,11 +185,9 @@ class HttpScanner(ScannerMixin):
         """Perform HEAD request to URL."""
         headers = {}
         try:
-            resp = requests.head(
-                url, 
+            resp = self.session.head(
+                url,
                 timeout=self.timeout,
-                headers={"User-Agent": "Pulse-NetworkScanner/1.0"},
-                verify=False,
                 allow_redirects=False
             )
             
@@ -167,6 +196,10 @@ class HttpScanner(ScannerMixin):
                     headers[key] = value
         except requests.RequestException:
             pass
+        finally:
+            # Ensure connection is closed properly
+            if 'resp' in locals() and hasattr(resp, 'close'):
+                resp.close()
             
         return headers
     
@@ -174,48 +207,53 @@ class HttpScanner(ScannerMixin):
         """Perform GET request and analyze content."""
         headers = {}
         try:
-            resp = requests.get(
-                url, 
+            # Use a different user agent for GET requests
+            custom_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124"}
+            
+            resp = self.session.get(
+                url,
                 timeout=self.timeout,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124"},
-                verify=False,
+                headers=custom_headers,
                 allow_redirects=True
             )
             
             if resp.status_code in [200, 302, 401]:
-                content = resp.text.lower()
-                
-                # Check for NAS indicators
-                for nas_type, keywords in self.nas_indicators.items():
-                    for keyword in keywords:
-                        if keyword in content:
+                # Use a context manager to ensure proper resource cleanup
+                with resp:
+                    content = resp.text.lower()
+                    
+                    # Check for NAS indicators
+                    for nas_type, keywords in self.nas_indicators.items():
+                        if any(keyword in content for keyword in keywords):
                             headers[f'X-Content-Contains-{nas_type.capitalize()}'] = 'true'
                             break
-                            
-                # Check for specific device content indicators
-                for sig_id, signature in self.signatures.items():
-                    if 'content_indicators' in signature:
-                        for indicator in signature['content_indicators']:
-                            if indicator.lower() in content:
+                                
+                    # Check for specific device content indicators
+                    for sig_id, signature in self.signatures.items():
+                        if 'content_indicators' in signature:
+                            indicators = signature.get('content_indicators', [])
+                            if any(indicator.lower() in content for indicator in indicators):
                                 headers[f'X-Content-Indicator-{sig_id}'] = 'true'
                                 break
-                
-                # Extract page title
-                if '<title>' in content and '</title>' in content:
-                    try:
-                        title = content.split('<title>')[1].split('</title>')[0].strip()
-                        headers['X-Page-Title'] = title
-                    except IndexError:
-                        # Malformed HTML, don't crash
-                        pass
-                
-                # Check for login forms
-                for indicator in self.login_indicators:
-                    if indicator in content:
+                    
+                    # Extract page title
+                    if '<title>' in content and '</title>' in content:
+                        try:
+                            title = content.split('<title>')[1].split('</title>')[0].strip()
+                            headers['X-Page-Title'] = title
+                        except IndexError:
+                            # Malformed HTML, don't crash
+                            pass
+                    
+                    # Check for login forms
+                    if any(indicator in content for indicator in self.login_indicators):
                         headers['X-Has-Login-Form'] = 'true'
-                        break
         except requests.RequestException:
             pass
+        finally:
+            # Ensure connection is closed properly
+            if 'resp' in locals() and hasattr(resp, 'close') and not hasattr(resp, '__exit__'):
+                resp.close()
             
         return headers
     
@@ -224,31 +262,63 @@ class HttpScanner(ScannerMixin):
         headers = {}
         management_paths = ['/manage', '/network', '/login', '/api/auth/login']
         
-        for path in management_paths:
-            try:
+        # Use ThreadPoolExecutor to check paths in parallel
+        with ThreadPoolExecutor(max_workers=len(management_paths)) as executor:
+            futures = {}
+            
+            for path in management_paths:
                 path_url = f"{protocol}://{ip_address}:{port}{path}"
-                resp = requests.get(
-                    path_url,
-                    timeout=self.timeout,
-                    headers={"User-Agent": "Pulse-NetworkScanner/1.0"},
-                    verify=False,
-                    allow_redirects=False
-                )
-                
-                if resp.status_code in [200, 302, 401]:
-                    content = resp.text.lower()
-                    if 'unifi' in content or 'ubiquiti' in content:
-                        headers['X-Content-Contains-UniFi'] = 'true'
-                        
-                        # Check for specific models
-                        for model_id in ["UDM-Pro-Max", "UDMPMAX", "UDM-SE"]:
-                            if model_id.lower() in content:
-                                headers['X-Content-Contains-Model'] = model_id
-                                break
-            except requests.RequestException:
-                continue
+                future = executor.submit(self._check_single_path, path_url)
+                futures[future] = path
+            
+            # Process results as they complete
+            for future in futures:
+                try:
+                    result = future.result()
+                    if result:
+                        headers.update(result)
+                except Exception:
+                    # Just continue if there's an error with one path
+                    pass
                 
         return headers
+        
+    def _check_single_path(self, path_url: str) -> Dict[str, str]:
+        """Check a single management path."""
+        headers = {}
+        try:
+            resp = self.session.get(
+                path_url,
+                timeout=self.timeout,
+                allow_redirects=False
+            )
+            
+            if resp.status_code in [200, 302, 401]:
+                content = resp.text.lower()
+                if 'unifi' in content or 'ubiquiti' in content:
+                    headers['X-Content-Contains-UniFi'] = 'true'
+                    
+                    # Check for specific models
+                    for model_id in ["UDM-Pro-Max", "UDMPMAX", "UDM-SE"]:
+                        if model_id.lower() in content:
+                            headers['X-Content-Contains-Model'] = model_id
+                            break
+        except requests.RequestException:
+            pass
+        finally:
+            # Ensure connection is closed properly
+            if 'resp' in locals() and hasattr(resp, 'close'):
+                resp.close()
+                
+        return headers
+        
+    def __del__(self):
+        """Ensure proper cleanup of resources."""
+        if hasattr(self, 'session'):
+            try:
+                self.session.close()
+            except Exception:
+                pass
 
 
 class SnmpScanner(ScannerMixin):
@@ -398,19 +468,23 @@ class ScanResult:
 class DeviceFingerprinter:
     """Performs advanced fingerprinting on network devices."""
     
-    def __init__(self, max_threads: int = 10, timeout: float = 2):
+    def __init__(self, max_threads: int = 10, timeout: float = 2, cache_size: int = 1000):
         """
         Initialize the device fingerprinter.
         
         Args:
             max_threads: Maximum number of concurrent threads
             timeout: Timeout for network operations in seconds
+            cache_size: Maximum number of MAC addresses to keep in the cache
         """
         logger.info("Initializing DeviceFingerprinter...")
         self.engine = FingerprintEngine()
         self.max_threads = max_threads
         self.timeout = timeout
+        self.cache_size = cache_size
         self.fingerprinted_mac_addresses: Set[str] = set()
+        self.fingerprint_timestamps: Dict[str, float] = {}  # Track when devices were fingerprinted
+        self.cache_lock = threading.RLock()  # Thread-safe cache operations
         
         # Initialize scanner components
         self.port_scanner = PortScanner(timeout, max_threads)
@@ -439,24 +513,43 @@ class DeviceFingerprinter:
             'mac_address': mac_address
         }
         
-        # Perform all fingerprinting operations in parallel
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            port_future = executor.submit(self.port_scanner.scan, ip_address)
-            http_future = executor.submit(self.http_scanner.scan, ip_address)
-            snmp_future = executor.submit(self.snmp_scanner.scan, ip_address)
-            mdns_future = executor.submit(self.mdns_scanner.scan, ip_address)
-            
-            # Collect results from all futures
-            scan_results = self._collect_future_results({
-                'port_scan': port_future,
-                'http_scan': http_future,
-                'snmp_scan': snmp_future,
-                'mdns_scan': mdns_future
-            })
-            
-            # Update device data with scan results
-            for result in scan_results:
-                device_data.update(result)
+        # Create a thread pool with a timeout for the entire operation
+        scan_timeout = self.timeout * 2  # Double the individual operation timeout
+        
+        try:
+            # Perform all fingerprinting operations in parallel with a timeout
+            with ThreadPoolExecutor(max_workers=4) as executor:  # Limit to 4 threads (one per scanner)
+                # Submit all scanning tasks
+                port_future = executor.submit(self.port_scanner.scan, ip_address)
+                http_future = executor.submit(self.http_scanner.scan, ip_address)
+                snmp_future = executor.submit(self.snmp_scanner.scan, ip_address)
+                mdns_future = executor.submit(self.mdns_scanner.scan, ip_address)
+                
+                # Collect results with timeout
+                futures_dict = {
+                    'port_scan': port_future,
+                    'http_scan': http_future,
+                    'snmp_scan': snmp_future,
+                    'mdns_scan': mdns_future
+                }
+                
+                # Use a separate thread to collect results with a timeout
+                result_thread = threading.Thread(
+                    target=self._collect_future_results_with_timeout,
+                    args=(futures_dict, device_data, scan_timeout)
+                )
+                result_thread.daemon = True
+                result_thread.start()
+                result_thread.join(timeout=scan_timeout + 1)  # Add 1 second buffer
+                
+                # Cancel any remaining futures if the thread is still alive
+                if result_thread.is_alive():
+                    logger.warning(f"Scan timeout for device {ip_address}, cancelling remaining operations")
+                    for name, future in futures_dict.items():
+                        if not future.done():
+                            future.cancel()
+        except Exception as e:
+            logger.error(f"Error in device fingerprinting thread pool: {e}")
         
         # Extract hostname from mDNS data if available
         if 'mdns_data' in device_data and 'hostname' in device_data['mdns_data']:
@@ -468,35 +561,57 @@ class DeviceFingerprinter:
         
         return device_data
     
-    def _collect_future_results(self, futures_dict: Dict[str, Future]) -> List[Dict[str, Any]]:
+    def _collect_future_results_with_timeout(self, futures_dict: Dict[str, Future],
+                                           device_data: Dict[str, Any],
+                                           timeout: float) -> None:
         """
-        Safely collect results from futures with error handling.
+        Collect results from futures with timeout and update device_data in place.
         
         Args:
             futures_dict: Dictionary mapping names to futures
-            
-        Returns:
-            List of successfully completed future results
+            device_data: Device data dictionary to update with results
+            timeout: Maximum time to wait for all futures
         """
-        results = []
+        start_time = time.time()
+        remaining_futures = list(futures_dict.items())
         
-        for name, future in futures_dict.items():
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Error in {name}: {e}")
-                # Add empty result for this component
-                if name == 'port_scan':
-                    results.append({'open_ports': []})
-                elif name == 'http_scan':
-                    results.append({'http_headers': {}})
-                elif name == 'snmp_scan':
-                    results.append({'snmp_data': {}})
-                elif name == 'mdns_scan':
-                    results.append({'mdns_data': {}})
+        while remaining_futures and (time.time() - start_time) < timeout:
+            # Process any completed futures
+            for name, future in list(remaining_futures):
+                if future.done():
+                    try:
+                        result = future.result(timeout=0.1)  # Non-blocking check
+                        device_data.update(result)
+                    except Exception as e:
+                        logger.error(f"Error in {name}: {e}")
+                        # Add empty result for this component
+                        if name == 'port_scan':
+                            device_data.update({'open_ports': []})
+                        elif name == 'http_scan':
+                            device_data.update({'http_headers': {}})
+                        elif name == 'snmp_scan':
+                            device_data.update({'snmp_data': {}})
+                        elif name == 'mdns_scan':
+                            device_data.update({'mdns_data': {}})
+                    
+                    # Remove processed future
+                    remaining_futures.remove((name, future))
+            
+            # Short sleep to prevent CPU spinning
+            time.sleep(0.1)
         
-        return results
+        # Handle any remaining futures that didn't complete in time
+        for name, future in remaining_futures:
+            logger.warning(f"Scan operation {name} timed out")
+            # Add empty result for this component
+            if name == 'port_scan':
+                device_data.update({'open_ports': []})
+            elif name == 'http_scan':
+                device_data.update({'http_headers': {}})
+            elif name == 'snmp_scan':
+                device_data.update({'snmp_data': {}})
+            elif name == 'mdns_scan':
+                device_data.update({'mdns_data': {}})
 
     def fingerprint_network(self, devices: List[Dict[str, str]],
                          force_scan: bool = False) -> List[Dict[str, Any]]:
@@ -535,28 +650,67 @@ class DeviceFingerprinter:
             batch = filtered_devices[i:i+batch_size]
             logger.info(f"Processing batch {i//batch_size + 1} with {len(batch)} devices")
             
-            # Process batch in parallel
+            # Process batch in parallel with proper resource management
             with ThreadPoolExecutor(max_workers=min(self.max_threads, batch_size)) as executor:
-                futures = {
-                    executor.submit(self.fingerprint_device, device['ip_address'], device['mac_address']): device
-                    for device in batch
-                }
+                # Submit all tasks and create a mapping of futures to devices
+                futures = {}
+                for device in batch:
+                    future = executor.submit(
+                        self.fingerprint_device,
+                        device['ip_address'],
+                        device['mac_address']
+                    )
+                    futures[future] = device
                 
-                # Use as_completed to process results as they come in
-                import concurrent.futures
+                # Process results as they complete with proper error handling
                 for future in concurrent.futures.as_completed(futures):
+                    device = futures[future]
                     try:
                         result = future.result()
                         results.append(result)
+                        
+                        # Update timestamp for this device
+                        with self.cache_lock:
+                            self.fingerprint_timestamps[device['mac_address']] = time.time()
+                            
                     except Exception as e:
-                        device = futures[future]
                         logger.error(f"Error fingerprinting device {device['ip_address']}: {str(e)}")
+                        # Create a minimal result for failed devices
+                        results.append({
+                            'ip_address': device['ip_address'],
+                            'mac_address': device['mac_address'],
+                            'error': str(e),
+                            'identification': []
+                        })
             
             # Add a small delay between batches to allow system to recover
-            import time
             time.sleep(1)
+            
+            # Prune the cache if it's getting too large
+            self._prune_cache_if_needed()
         
         return results
+    
+    def _prune_cache_if_needed(self) -> None:
+        """Prune the fingerprinted devices cache if it exceeds the maximum size."""
+        with self.cache_lock:
+            if len(self.fingerprinted_mac_addresses) > self.cache_size:
+                logger.info(f"Pruning fingerprint cache (current size: {len(self.fingerprinted_mac_addresses)})")
+                
+                # Sort MAC addresses by timestamp (oldest first)
+                sorted_macs = sorted(
+                    self.fingerprint_timestamps.keys(),
+                    key=lambda mac: self.fingerprint_timestamps.get(mac, 0)
+                )
+                
+                # Remove oldest entries until we're under the limit
+                to_remove = len(sorted_macs) - self.cache_size
+                if to_remove > 0:
+                    for mac in sorted_macs[:to_remove]:
+                        self.fingerprinted_mac_addresses.discard(mac)
+                        self.fingerprint_timestamps.pop(mac, None)
+                    
+                    logger.info(f"Pruned {to_remove} entries from fingerprint cache")
     
     def _clear_device_cache(self, mac_addresses: List[str]) -> None:
         """
@@ -565,12 +719,14 @@ class DeviceFingerprinter:
         Args:
             mac_addresses: List of MAC addresses to clear
         """
-        for mac in mac_addresses:
-            if mac in self.fingerprinted_mac_addresses:
-                self.fingerprinted_mac_addresses.remove(mac)
-                logger.info(f"Cleared from in-memory cache: {mac} (forced scan)")
+        with self.cache_lock:
+            for mac in mac_addresses:
+                if mac in self.fingerprinted_mac_addresses:
+                    self.fingerprinted_mac_addresses.remove(mac)
+                    self.fingerprint_timestamps.pop(mac, None)
+                    logger.info(f"Cleared from in-memory cache: {mac} (forced scan)")
     
-    def _filter_fingerprinted_devices(self, devices: List[Dict[str, str]], 
+    def _filter_fingerprinted_devices(self, devices: List[Dict[str, str]],
                                   force_scan: bool) -> List[Dict[str, str]]:
         """
         Filter out already fingerprinted devices.
@@ -586,14 +742,23 @@ class DeviceFingerprinter:
             return devices
             
         filtered_devices = []
-        for device in devices:
-            mac = device.get('mac_address', '')
-            if not mac or mac in self.fingerprinted_mac_addresses:
-                logger.info(f"Skipping already fingerprinted device: {mac}")
-                continue
-                
-            filtered_devices.append(device)
-            # Track this device as processed
-            self.fingerprinted_mac_addresses.add(mac)
+        with self.cache_lock:
+            for device in devices:
+                mac = device.get('mac_address', '')
+                if not mac or mac in self.fingerprinted_mac_addresses:
+                    logger.info(f"Skipping already fingerprinted device: {mac}")
+                    continue
+                    
+                filtered_devices.append(device)
+                # Track this device as processed
+                self.fingerprinted_mac_addresses.add(mac)
+                self.fingerprint_timestamps[mac] = time.time()
             
         return filtered_devices
+        
+    def clear_all_caches(self) -> None:
+        """Clear all in-memory caches."""
+        with self.cache_lock:
+            self.fingerprinted_mac_addresses.clear()
+            self.fingerprint_timestamps.clear()
+            logger.info("Cleared all fingerprinting caches")
