@@ -3,7 +3,7 @@
 # This script starts the Cybex Pulse application
 
 # Use the installation directory from the install script
-INSTALL_DIR="/opt/cybex-pulse"
+INSTALL_DIR="/opt/pulse"
 
 # Create a dynamic wrapper module for direct execution if it doesn't exist
 if [ ! -f "$INSTALL_DIR/run_app.py" ]; then
@@ -40,6 +40,6 @@ EOF
     chmod +x "$INSTALL_DIR/run_app.py"
 fi
 
-# Change to the Pulse directory, activate the virtual environment, and run the application
+# Change to the Pulse directory and run the application directly
 # Use exec to replace the shell process with Python to properly handle signals
-cd $INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && exec python "$INSTALL_DIR/run_app.py" "$@"
+cd $INSTALL_DIR && export PYTHONPATH=$INSTALL_DIR:$PYTHONPATH && exec python "$INSTALL_DIR/run_app.py" "$@"
