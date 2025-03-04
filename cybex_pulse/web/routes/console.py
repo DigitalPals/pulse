@@ -108,43 +108,27 @@ def register_console_routes(app, server):
     root_logger = logging.getLogger()
     root_logger.addHandler(console_handler)
     
-    # Redirect stdout and stderr
+    # Store original stdout and stderr but don't redirect globally
     original_stdout = sys.stdout
     original_stderr = sys.stderr
     
-    # Create stream redirectors
+    # Create stream redirectors but don't apply them globally
     stdout_redirector = StreamToQueue(console_messages, is_error=False)
     stderr_redirector = StreamToQueue(console_messages, is_error=True)
     
-    # Redirect stdout and stderr
-    sys.stdout = stdout_redirector
-    sys.stderr = stderr_redirector
+    # We'll use these in a context manager when needed, not globally
     
     @app.route('/console')
     @server.login_required
     def console_page():
         """Display the console page."""
-        # Get minimal system information for initial page load
-        # This provides just enough data to render the page, the rest will be loaded via AJAX
-        try:
-            # Only get CPU and memory info for initial load
-            # This avoids the expensive disk and network operations
-            system_info = {
-                "cpu": get_cpu_info(),
-                "memory": get_memory_info(),
-                "disk": {
-                    "percent": 0,  # Placeholder values
-                    "used": 0,
-                    "total": 100
-                }
-            }
-        except Exception as e:
-            server.logger.error(f"Error getting initial system info: {str(e)}")
-            system_info = {
-                "cpu": {"percent": 0, "count": 1, "model": "Unknown"},
-                "memory": {"percent": 0, "used": 0, "total": 100},
-                "disk": {"percent": 0, "used": 0, "total": 100}
-            }
+        # Use placeholder values for initial page load
+        # All real data will be loaded asynchronously via AJAX to prevent page load delays
+        system_info = {
+            "cpu": {"percent": 0, "count": 1, "model": "Loading..."},
+            "memory": {"percent": 0, "used": 0, "total": 100},
+            "disk": {"percent": 0, "used": 0, "total": 100}
+        }
         
         return server.render_template('console.html', system_info=system_info)
     
@@ -158,27 +142,46 @@ def register_console_routes(app, server):
             server.Response = Response
             server.stream_with_context = stream_with_context
         
+        # Create a context manager for stdout/stderr redirection
+        class RedirectStdStreams:
+            def __init__(self, stdout=None, stderr=None):
+                self._stdout = stdout or sys.stdout
+                self._stderr = stderr or sys.stderr
+
+            def __enter__(self):
+                self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
+                self.old_stdout.flush(); self.old_stderr.flush()
+                sys.stdout, sys.stderr = self._stdout, self._stderr
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                self._stdout.flush(); self._stderr.flush()
+                sys.stdout = self.old_stdout
+                sys.stderr = self.old_stderr
+        
         def generate():
             """Generate SSE events."""
             try:
                 # Send initial message
                 yield "event: message\ndata: {\"message\": \"Connected to Cybex Pulse console stream. Showing real-time output.\"}\n\n"
                 
-                # Send messages from queue
-                while True:
-                    try:
-                        # Try to get a message with timeout
-                        message = console_messages.get(timeout=1.0)
-                        
-                        # Format as SSE event
-                        if message.get("is_error", False):
-                            yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
-                        else:
-                            yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
-                        
-                    except queue.Empty:
-                        # Send heartbeat to keep connection alive
-                        yield ": heartbeat\n\n"
+                # Temporarily redirect stdout/stderr only for this stream
+                with RedirectStdStreams(stdout=stdout_redirector, stderr=stderr_redirector):
+                    # Send messages from queue
+                    while True:
+                        try:
+                            # Try to get a message with timeout
+                            message = console_messages.get(timeout=1.0)
+                            
+                            # Format as SSE event
+                            if message.get("is_error", False):
+                                yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
+                            else:
+                                yield f"event: message\ndata: {server.json.dumps(message)}\n\n"
+                            
+                        except queue.Empty:
+                            # Send heartbeat to keep connection alive
+                            yield ": heartbeat\n\n"
             except Exception as e:
                 # Log the error
                 server.logger.error(f"Error in console stream: {str(e)}")
@@ -194,12 +197,19 @@ def register_console_routes(app, server):
             }
         )
     
-    # Add a cleanup function to restore stdout/stderr
+    # Add a cleanup function to remove the logger handler
     def cleanup():
-        """Restore original stdout and stderr."""
-        sys.stdout = original_stdout
-        sys.stderr = original_stderr
+        """Clean up console resources."""
+        # We don't need to restore stdout/stderr since we're using a context manager
+        # Just remove the logger handler
         root_logger.removeHandler(console_handler)
+        
+        # Clear the message queue to prevent memory leaks
+        try:
+            while not console_messages.empty():
+                console_messages.get_nowait()
+        except Exception:
+            pass
     
     # Register cleanup with server
     if hasattr(server, 'cleanup_functions'):

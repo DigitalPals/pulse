@@ -150,19 +150,17 @@
         transition: width 0.5s ease-in-out;
     }
     
+    /* Use solid colors instead of gradients for better performance */
     #cpu-progress {
-        background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--red) 100%);
-        background-size: 200% 100%;
+        background-color: var(--green);
     }
     
     #memory-progress {
-        background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--red) 100%);
-        background-size: 200% 100%;
+        background-color: var(--green);
     }
     
     #disk-progress {
-        background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--red) 100%);
-        background-size: 200% 100%;
+        background-color: var(--green);
     }
     
     .console-container {
@@ -383,25 +381,41 @@
         };
     }
     
-    // Function to refresh system information with debouncing
+    // Function to refresh system information with debouncing and parallel requests
     let refreshInProgress = false;
     function refreshSystemInfo() {
         // Prevent multiple simultaneous requests
         if (refreshInProgress) return;
         
         refreshInProgress = true;
-        fetch('/api/system-info')
-            .then(response => response.json())
-            .then(data => {
-                updateSystemInfoCards(data);
-                updateProgressBars();
-                updateLastUpdated();
-                refreshInProgress = false;
-            })
-            .catch(error => {
-                console.error('Error fetching system info:', error);
-                refreshInProgress = false;
-            });
+        
+        // Use separate API endpoints for each metric to reduce load
+        // This allows partial updates if one endpoint is slow
+        Promise.all([
+            fetch('/api/system-info/cpu').then(response => response.json()),
+            fetch('/api/system-info/memory').then(response => response.json()),
+            fetch('/api/system-info/disk').then(response => response.json())
+        ])
+        .then(([cpuData, memoryData, diskData]) => {
+            // Combine the data
+            const data = {
+                cpu: cpuData,
+                memory: memoryData,
+                disk: diskData
+            };
+            
+            updateSystemInfoCards(data);
+            updateProgressBars();
+            updateLastUpdated();
+            refreshInProgress = false;
+        })
+        .catch(error => {
+            console.error('Error fetching system info:', error);
+            refreshInProgress = false;
+            
+            // Schedule a retry after a delay
+            setTimeout(refreshSystemInfo, 5000);
+        });
     }
     
     // Function to update system information cards
@@ -501,6 +515,10 @@
     // Cache DOM elements for console status
     let consoleStatusElement = null;
     
+    // Track reconnection attempts for exponential backoff
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY = 30000; // Maximum reconnect delay of 30 seconds
+    
     function connectToConsoleStream() {
         // Cache console status element
         if (!consoleStatusElement) {
@@ -513,12 +531,21 @@
             consoleEventSource = null;
         }
         
+        // Update status to connecting
+        if (consoleStatusElement) {
+            consoleStatusElement.textContent = 'Connecting...';
+            consoleStatusElement.className = 'badge badge-warning';
+        }
+        
         // Connect to the SSE endpoint
         try {
             consoleEventSource = new EventSource('/console-stream');
             
             // Handle connection open
             consoleEventSource.onopen = function() {
+                // Reset reconnect attempts on successful connection
+                reconnectAttempts = 0;
+                
                 if (consoleStatusElement) {
                     consoleStatusElement.textContent = 'Connected';
                     consoleStatusElement.className = 'badge badge-success';
@@ -554,8 +581,8 @@
                 processingQueue = true;
                 
                 requestAnimationFrame(function() {
-                    // Process up to 10 messages at a time
-                    const messagesToProcess = messageQueue.splice(0, 10);
+                    // Process up to 20 messages at a time (increased from 10)
+                    const messagesToProcess = messageQueue.splice(0, 20);
                     
                     if (messagesToProcess.length > 0) {
                         // Add messages to console
@@ -580,9 +607,10 @@
                 consoleStatusElement.textContent = 'Connection Failed';
                 consoleStatusElement.className = 'badge badge-danger';
             }
+            scheduleReconnect();
         }
         
-        // Handle errors - simplified error handling
+        // Handle errors with improved error handling
         consoleEventSource.addEventListener('error', function(event) {
             if (event.data) {
                 try {
@@ -594,15 +622,16 @@
             }
         });
         
-        // Handle connection errors with cached DOM element
+        // Handle connection errors with cached DOM element and exponential backoff
         consoleEventSource.onerror = function(event) {
             // Check if the connection was never established
             if (consoleEventSource.readyState === 0) {
-                appendToConsole('Failed to connect to console stream. Please try again.', "error");
+                appendToConsole('Failed to connect to console stream. Will retry automatically.', "error");
                 if (consoleStatusElement) {
                     consoleStatusElement.textContent = 'Connection Failed';
                     consoleStatusElement.className = 'badge badge-danger';
                 }
+                scheduleReconnect();
             }
             // Check if the connection was lost after being established
             else if (consoleEventSource.readyState === 2) {
@@ -611,11 +640,20 @@
                     consoleStatusElement.textContent = 'Disconnected';
                     consoleStatusElement.className = 'badge badge-warning';
                 }
-                
-                // Try to reconnect after a short delay
-                setTimeout(connectToConsoleStream, 3000);
+                scheduleReconnect();
             }
         };
+    }
+    
+    // Function to schedule reconnection with exponential backoff
+    function scheduleReconnect() {
+        reconnectAttempts++;
+        // Calculate delay with exponential backoff: 1s, 2s, 4s, 8s, etc. up to MAX_RECONNECT_DELAY
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+        
+        appendToConsole(`Reconnecting in ${delay/1000} seconds (attempt ${reconnectAttempts})...`, "info");
+        
+        setTimeout(connectToConsoleStream, delay);
     }
     
     // Cache DOM elements for console output
@@ -629,7 +667,7 @@
     };
     
     // Limit the number of messages to prevent memory issues
-    const MAX_MESSAGES = 1000;
+    const MAX_MESSAGES = 500; // Reduced from 1000 to 500 to improve performance
     
     function appendToConsole(message, type) {
         // Get console output element if not cached
@@ -647,12 +685,13 @@
             timestamp: timestamp
         };
         
-        // Add to messages array with limit check
-        allMessages.push(messageObj);
+        // Add to messages array with limit check - use unshift for better performance when trimming
+        // This adds new messages to the beginning of the array, making it faster to trim old messages
+        allMessages.unshift(messageObj);
         
         // Trim messages array if it gets too large
         if (allMessages.length > MAX_MESSAGES) {
-            allMessages = allMessages.slice(-MAX_MESSAGES);
+            allMessages.length = MAX_MESSAGES; // More efficient than slice
         }
         
         // Check if this message should be displayed based on current filter
@@ -741,8 +780,10 @@
             consoleOutputElement = document.getElementById('console-output');
         }
         
-        // Clear current display
-        consoleOutputElement.innerHTML = '';
+        // Clear current display - use a more efficient method
+        while (consoleOutputElement.firstChild) {
+            consoleOutputElement.removeChild(consoleOutputElement.firstChild);
+        }
         
         // Re-add messages that match the filter and search
         // Use a fragment for better performance
@@ -751,8 +792,9 @@
         // Count how many messages we're displaying
         let displayCount = 0;
         
-        // Process messages in reverse order (newest first) up to MAX_MESSAGES
-        for (let i = allMessages.length - 1; i >= 0 && displayCount < MAX_MESSAGES; i--) {
+        // Since we changed allMessages to add at the beginning (unshift),
+        // we can now process in forward order which is more efficient
+        for (let i = 0; i < allMessages.length && displayCount < MAX_MESSAGES; i++) {
             if (shouldDisplayMessage(allMessages[i])) {
                 // Create message element directly in the fragment
                 const messageObj = allMessages[i];
@@ -771,16 +813,24 @@
                 const messageContent = document.createElement('span');
                 messageContent.className = 'message-content';
                 
-                // Highlight search term if present
+                // Highlight search term if present - use a safer regex approach
                 if (searchTerm && messageObj.message.toLowerCase().includes(searchTerm.toLowerCase())) {
-                    const regex = new RegExp(`(${searchTerm})`, 'gi');
-                    messageContent.innerHTML = icon + messageObj.message.replace(regex, '<span class="highlight">$1</span>');
+                    try {
+                        // Escape special regex characters to prevent regex errors
+                        const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+                        messageContent.innerHTML = icon + messageObj.message.replace(regex, '<span class="highlight">$1</span>');
+                    } catch (e) {
+                        // Fallback if regex fails
+                        messageContent.innerHTML = icon + messageObj.message;
+                    }
                 } else {
                     messageContent.innerHTML = icon + messageObj.message;
                 }
                 
                 messageElement.appendChild(messageContent);
-                fragment.insertBefore(messageElement, fragment.firstChild); // Insert at beginning to maintain chronological order
+                // Add to fragment in chronological order (oldest first)
+                fragment.appendChild(messageElement);
                 displayCount++;
             }
         }
