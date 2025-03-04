@@ -3,6 +3,7 @@ Integration module to connect network scanner with fingerprinting engine.
 Provides comprehensive device fingerprinting capabilities.
 """
 import logging
+import re
 import socket
 import subprocess
 import threading
@@ -10,8 +11,9 @@ import time
 from abc import ABC, abstractmethod
 import requests
 import urllib3
+import concurrent.futures
 from typing import Dict, List, Optional, Any, Set, Tuple
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from dataclasses import dataclass, field
 
 from cybex_pulse.fingerprinting.engine import FingerprintEngine
@@ -44,9 +46,11 @@ class PortScanner(ScannerMixin):
         """
         self.timeout = timeout
         self.max_threads = max_threads
+        # Prioritize the most common ports first
+        self.high_priority_ports = [80, 443, 22, 8080, 8443]
         self.default_ports = [
-            21, 22, 23, 25, 53, 80, 81, 88, 443, 445, 515, 631, 
-            1883, 3000, 3306, 3389, 5000, 5001, 5060, 5900, 8000, 8080, 8443, 
+            21, 23, 25, 53, 81, 88, 445, 515, 631,
+            1883, 3000, 3306, 3389, 5000, 5001, 5060, 5900, 8000,
             8081, 8123, 8888, 49152, 49153
         ]
         
@@ -62,37 +66,87 @@ class PortScanner(ScannerMixin):
             Dictionary with scan results
         """
         if ports is None:
-            ports = self.default_ports
+            # Combine high priority and default ports
+            all_ports = self.high_priority_ports + [p for p in self.default_ports if p not in self.high_priority_ports]
+        else:
+            all_ports = ports
         
         open_ports = []
         
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+        # First, scan high priority ports with a shorter timeout
+        high_priority_scan_ports = [p for p in all_ports if p in self.high_priority_ports]
+        remaining_ports = [p for p in all_ports if p not in self.high_priority_ports]
+        
+        # Use a shorter timeout for high priority ports to get quick results
+        short_timeout = min(0.5, self.timeout / 2)
+        
+        # Scan high priority ports first with shorter timeout
+        if high_priority_scan_ports:
+            high_priority_results = self._scan_port_batch(ip_address, high_priority_scan_ports, short_timeout)
+            open_ports.extend(high_priority_results)
+        
+        # If we have time left, scan remaining ports
+        if remaining_ports:
+            # Use a slightly longer timeout for remaining ports but still less than the full timeout
+            regular_timeout = min(1.0, self.timeout * 0.75)
+            regular_results = self._scan_port_batch(ip_address, remaining_ports, regular_timeout)
+            open_ports.extend(regular_results)
+        
+        return {'open_ports': open_ports}
+    
+    def _scan_port_batch(self, ip_address: str, ports: List[int], port_timeout: float) -> List[int]:
+        """Scan a batch of ports with the specified timeout."""
+        open_ports = []
+        
+        # Limit the number of threads based on the number of ports
+        batch_max_threads = min(self.max_threads, len(ports))
+        
+        with ThreadPoolExecutor(max_workers=batch_max_threads) as executor:
             futures = {
-                executor.submit(self._check_port, ip_address, port): port 
+                executor.submit(self._check_port, ip_address, port, port_timeout): port
                 for port in ports
             }
             
-            for future in futures:
+            # Use as_completed with a timeout to avoid waiting too long
+            done_futures, _ = concurrent.futures.wait(
+                futures.keys(),
+                timeout=port_timeout * 1.5,  # Give a bit extra time for all threads to complete
+                return_when=concurrent.futures.ALL_COMPLETED
+            )
+            
+            # Process completed futures
+            for future in done_futures:
                 port = futures[future]
                 try:
-                    is_open = future.result()
+                    is_open = future.result(timeout=0.1)  # Short timeout for result retrieval
                     if is_open:
                         open_ports.append(port)
                 except Exception as e:
                     logger.debug(f"Error checking port {port} on {ip_address}: {e}")
+            
+            # Cancel any remaining futures
+            for future in futures:
+                if future not in done_futures and not future.done():
+                    future.cancel()
         
-        return {'open_ports': open_ports}
+        return open_ports
     
-    def _check_port(self, ip_address: str, port: int) -> bool:
+    def _check_port(self, ip_address: str, port: int, port_timeout: float) -> bool:
         """Check if a specific port is open."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(self.timeout)
+        sock.settimeout(port_timeout)
         
         try:
             result = sock.connect_ex((ip_address, port))
             return result == 0
+        except (socket.timeout, socket.error) as e:
+            logger.debug(f"Socket error checking port {port} on {ip_address}: {e}")
+            return False
         finally:
-            sock.close()
+            try:
+                sock.close()
+            except Exception:
+                pass
 
 
 class HttpScanner(ScannerMixin):
@@ -387,6 +441,8 @@ class MdnsScanner(ScannerMixin):
             timeout: Subprocess timeout in seconds
         """
         self.timeout = timeout
+        # Use a shorter timeout for mDNS operations to prevent long waits
+        self.mdns_timeout = min(1.0, timeout / 2)
         
     def scan(self, ip_address: str) -> Dict[str, Any]:
         """
@@ -399,30 +455,42 @@ class MdnsScanner(ScannerMixin):
             Dictionary with mDNS data
         """
         mdns_data = {}
-        hostname = self._resolve_hostname(ip_address)
         
-        if hostname:
-            mdns_data['hostname'] = hostname
-            service_info = self._get_service_info(ip_address)
-            mdns_data.update(service_info)
+        # Try to get hostname with a shorter timeout
+        try:
+            hostname = self._resolve_hostname(ip_address)
+            if hostname:
+                mdns_data['hostname'] = hostname
+                
+                # Only try to get service info if we successfully got a hostname
+                # and we still have time left in our budget
+                service_info = self._get_service_info(ip_address)
+                mdns_data.update(service_info)
+        except Exception as e:
+            logger.debug(f"Error in mDNS scan for {ip_address}: {e}")
             
         return {'mdns_data': mdns_data}
     
     def _resolve_hostname(self, ip_address: str) -> Optional[str]:
         """Resolve hostname using avahi-resolve."""
         try:
+            # Check if avahi-resolve is available
+            if not self._check_command_exists('avahi-resolve'):
+                logger.debug("avahi-resolve command not found, skipping hostname resolution")
+                return None
+                
             cmd = ['avahi-resolve', '-a', ip_address]
             result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                timeout=self.timeout
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.mdns_timeout
             )
             
             if result.returncode == 0 and result.stdout:
                 return result.stdout.strip()
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired):
-            pass
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            logger.debug(f"Hostname resolution timed out for {ip_address}: {e}")
             
         return None
     
@@ -431,12 +499,17 @@ class MdnsScanner(ScannerMixin):
         service_info = {}
         
         try:
+            # Check if avahi-browse is available
+            if not self._check_command_exists('avahi-browse'):
+                logger.debug("avahi-browse command not found, skipping service discovery")
+                return service_info
+                
             cmd = ['avahi-browse', '-a', '-p', '-r', '-t']
             result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                timeout=10
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.mdns_timeout
             )
             
             if result.returncode == 0:
@@ -447,10 +520,24 @@ class MdnsScanner(ScannerMixin):
                             service_info['service_type'] = parts[0]
                             service_info['service_name'] = parts[3]
                             break
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired):
-            pass
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            logger.debug(f"Service discovery timed out for {ip_address}: {e}")
             
         return service_info
+        
+    def _check_command_exists(self, command: str) -> bool:
+        """Check if a command exists in the system PATH."""
+        try:
+            # Use 'which' command to check if the command exists
+            result = subprocess.run(
+                ['which', command],
+                capture_output=True,
+                text=True,
+                timeout=0.5
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+            return False
 
 
 @dataclass
@@ -518,17 +605,34 @@ class DeviceFingerprinter:
         scan_timeout = self.timeout * 2  # Double the individual operation timeout
         
         try:
-            # Perform all fingerprinting operations in parallel with a timeout
-            with ThreadPoolExecutor(max_workers=4) as executor:  # Limit to 4 threads (one per scanner)
-                # Submit all scanning tasks
-                port_future = executor.submit(self.port_scanner.scan, ip_address)
+            # Use a more efficient approach - run port scan first, then other scans in parallel
+            # This helps identify responsive devices quickly and prioritize further scanning
+            
+            # Step 1: Run port scan first to quickly determine if device is responsive
+            logger.debug(f"Starting port scan for {ip_address}")
+            try:
+                port_scan_result = self.port_scanner.scan(ip_address)
+                device_data.update(port_scan_result)
+                
+                # If no ports are open, device might be offline or firewalled
+                # Still continue with other scans but with shorter timeouts
+                if not port_scan_result.get('open_ports', []):
+                    logger.debug(f"No open ports found for {ip_address}, device may be offline or firewalled")
+                    scan_timeout = self.timeout  # Reduce timeout for potentially offline devices
+            except Exception as e:
+                logger.error(f"Error in port scan for {ip_address}: {e}")
+                device_data['open_ports'] = []
+            
+            # Step 2: Run other scans in parallel
+            logger.debug(f"Starting parallel scans for {ip_address}")
+            with ThreadPoolExecutor(max_workers=3) as executor:  # Limit to 3 threads (one per remaining scanner)
+                # Submit remaining scanning tasks
                 http_future = executor.submit(self.http_scanner.scan, ip_address)
                 snmp_future = executor.submit(self.snmp_scanner.scan, ip_address)
                 mdns_future = executor.submit(self.mdns_scanner.scan, ip_address)
                 
                 # Collect results with timeout
                 futures_dict = {
-                    'port_scan': port_future,
                     'http_scan': http_future,
                     'snmp_scan': snmp_future,
                     'mdns_scan': mdns_future
@@ -557,8 +661,12 @@ class DeviceFingerprinter:
             device_data['hostname'] = device_data['mdns_data']['hostname']
         
         # Identify device using fingerprint engine
-        identification = self.engine.identify_device(device_data)
-        device_data['identification'] = identification
+        try:
+            identification = self.engine.identify_device(device_data)
+            device_data['identification'] = identification
+        except Exception as e:
+            logger.error(f"Error identifying device {ip_address}: {e}")
+            device_data['identification'] = []
         
         return device_data
     
@@ -575,6 +683,14 @@ class DeviceFingerprinter:
         """
         start_time = time.time()
         remaining_futures = list(futures_dict.items())
+        
+        # Set custom timeouts for specific scan types
+        scan_timeouts = {
+            'port_scan': timeout,
+            'http_scan': timeout,
+            'snmp_scan': timeout,
+            'mdns_scan': timeout * 0.5  # Reduce mdns_scan timeout to avoid long waits
+        }
         
         while remaining_futures and (time.time() - start_time) < timeout:
             # Process any completed futures
@@ -597,13 +713,31 @@ class DeviceFingerprinter:
                     
                     # Remove processed future
                     remaining_futures.remove((name, future))
+                # Check if individual scan timeout has been reached
+                elif (time.time() - start_time) > scan_timeouts.get(name, timeout):
+                    logger.warning(f"Scan operation {name} timed out (individual timeout)")
+                    # Cancel the future
+                    future.cancel()
+                    # Add empty result for this component
+                    if name == 'port_scan':
+                        device_data.update({'open_ports': []})
+                    elif name == 'http_scan':
+                        device_data.update({'http_headers': {}})
+                    elif name == 'snmp_scan':
+                        device_data.update({'snmp_data': {}})
+                    elif name == 'mdns_scan':
+                        device_data.update({'mdns_data': {}})
+                    # Remove from remaining futures
+                    remaining_futures.remove((name, future))
             
             # Short sleep to prevent CPU spinning
             time.sleep(0.1)
         
         # Handle any remaining futures that didn't complete in time
         for name, future in remaining_futures:
-            logger.warning(f"Scan operation {name} timed out")
+            logger.warning(f"Scan operation {name} timed out (global timeout)")
+            # Cancel the future to prevent it from running in the background
+            future.cancel()
             # Add empty result for this component
             if name == 'port_scan':
                 device_data.update({'open_ports': []})
@@ -642,13 +776,17 @@ class DeviceFingerprinter:
             
         logger.info(f"Fingerprinting {len(filtered_devices)} devices after filtering")
         
+        # Prioritize devices - put devices with common ports first
+        # This helps ensure we get results for the most important devices first
+        prioritized_devices = self._prioritize_devices(filtered_devices)
+        
         # Limit the number of devices processed in a single batch to avoid resource exhaustion
-        batch_size = min(5, len(filtered_devices))
+        batch_size = min(3, len(prioritized_devices))  # Reduced batch size for better stability
         logger.info(f"Processing devices in batches of {batch_size}")
         
         # Process devices in smaller batches to reduce resource usage
-        for i in range(0, len(filtered_devices), batch_size):
-            batch = filtered_devices[i:i+batch_size]
+        for i in range(0, len(prioritized_devices), batch_size):
+            batch = prioritized_devices[i:i+batch_size]
             logger.info(f"Processing batch {i//batch_size + 1} with {len(batch)} devices")
             
             # Process batch in parallel with proper resource management
@@ -663,11 +801,34 @@ class DeviceFingerprinter:
                     )
                     futures[future] = device
                 
-                # Process results as they complete with proper error handling
-                for future in concurrent.futures.as_completed(futures):
+                # Use wait with a timeout to avoid waiting indefinitely
+                # This provides an additional safety net beyond the individual timeouts
+                batch_timeout = self.timeout * 3 * batch_size  # Scale timeout with batch size
+                done_futures, not_done_futures = concurrent.futures.wait(
+                    futures.keys(),
+                    timeout=batch_timeout,
+                    return_when=concurrent.futures.ALL_COMPLETED
+                )
+                
+                # Cancel any futures that didn't complete in time
+                for future in not_done_futures:
+                    future.cancel()
+                    device = futures[future]
+                    logger.warning(f"Cancelled fingerprinting for {device['ip_address']} due to batch timeout")
+                    # Add a minimal result for timed-out devices
+                    results.append({
+                        'ip_address': device['ip_address'],
+                        'mac_address': device['mac_address'],
+                        'error': "Fingerprinting timed out",
+                        'identification': []
+                    })
+                
+                # Process completed futures
+                for future in done_futures:
                     device = futures[future]
                     try:
-                        result = future.result()
+                        # Use a short timeout when getting results to avoid blocking
+                        result = future.result(timeout=0.5)
                         results.append(result)
                         
                         # Update timestamp for this device
@@ -691,6 +852,51 @@ class DeviceFingerprinter:
             self._prune_cache_if_needed()
         
         return results
+        
+    def _prioritize_devices(self, devices: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Prioritize devices for scanning based on IP address patterns.
+        Devices with common local IP patterns are prioritized.
+        
+        Args:
+            devices: List of devices to prioritize
+            
+        Returns:
+            Prioritized list of devices
+        """
+        # Common local IP patterns that often represent important devices
+        high_priority_patterns = [
+            r'192\.168\.1\.1$',    # Common router IP
+            r'192\.168\.0\.1$',    # Common router IP
+            r'10\.0\.0\.1$',       # Common router IP
+            r'192\.168\.[01]\.(1|254)$',  # Common gateway IPs
+        ]
+        
+        # Medium priority patterns
+        medium_priority_patterns = [
+            r'192\.168\.[01]\.(2|3|4|5)$',  # Often servers or important devices
+            r'10\.0\.0\.[1-9]$',            # Often servers or important devices
+        ]
+        
+        high_priority = []
+        medium_priority = []
+        normal_priority = []
+        
+        for device in devices:
+            ip = device.get('ip_address', '')
+            
+            # Check if IP matches high priority patterns
+            if any(re.match(pattern, ip) for pattern in high_priority_patterns):
+                high_priority.append(device)
+            # Check if IP matches medium priority patterns
+            elif any(re.match(pattern, ip) for pattern in medium_priority_patterns):
+                medium_priority.append(device)
+            # Otherwise, normal priority
+            else:
+                normal_priority.append(device)
+        
+        # Combine the lists in priority order
+        return high_priority + medium_priority + normal_priority
     
     def _prune_cache_if_needed(self) -> None:
         """Prune the fingerprinted devices cache if it exceeds the maximum size."""

@@ -147,6 +147,7 @@ def main():
             
             # Give threads a short time to respond to the stop event
             import time
+            import sys
             time.sleep(0.5)
             
             # Then call cleanup to properly terminate resources
