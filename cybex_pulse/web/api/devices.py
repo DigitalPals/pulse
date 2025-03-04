@@ -19,15 +19,31 @@ def register_device_routes(app, server):
         page_size = 50
         all_devices = server.db_manager.get_all_devices()
         
+        # Deduplicate devices by MAC address
+        # This ensures we don't have duplicate entries for the same device
+        # In case of duplicates, keep the most recently seen device
+        unique_devices = {}
+        for device in all_devices:
+            mac_address = device.get('mac_address')
+            if mac_address:
+                # If this MAC address is already in our unique devices dict,
+                # only replace it if the current device was seen more recently
+                if mac_address not in unique_devices or device.get('last_seen', 0) > unique_devices[mac_address].get('last_seen', 0):
+                    unique_devices[mac_address] = device
+        
+        # Convert back to a list and sort by last_seen (descending)
+        deduplicated_devices = list(unique_devices.values())
+        deduplicated_devices.sort(key=lambda x: x.get('last_seen', 0), reverse=True)
+        
         # Calculate total pages
-        total_devices = len(all_devices)
+        total_devices = len(deduplicated_devices)
         total_pages = (total_devices + page_size - 1) // page_size
         
         # Paginate devices if page parameter is provided
         if 'page' in server.request.args:
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
-            paginated_devices = all_devices[start_idx:end_idx]
+            paginated_devices = deduplicated_devices[start_idx:end_idx]
             return server.jsonify({
                 'devices': paginated_devices,
                 'total_pages': total_pages,
@@ -36,7 +52,7 @@ def register_device_routes(app, server):
             })
         else:
             # For backward compatibility, return all devices if no page specified
-            return server.jsonify(all_devices)
+            return server.jsonify(deduplicated_devices)
         
     # Get device ports
     @app.route('/api/devices/<int:device_id>/ports')

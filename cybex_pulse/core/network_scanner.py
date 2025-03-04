@@ -52,6 +52,10 @@ class NetworkScanner:
         
         # Keep track of devices seen in the previous scan
         self.previous_scan_devices = set()
+        
+        # Keep track of devices that are currently being processed
+        # to prevent duplicate entries during a single scan
+        self.processing_devices = set()
     
     def scan(self) -> None:
         """Scan the network for devices."""
@@ -65,6 +69,9 @@ class NetworkScanner:
         
         # Clear current scan devices
         self.current_scan_devices = set()
+        
+        # Clear processing devices for this scan cycle
+        self.processing_devices = set()
         
         # Run network scan using nmap ping scan (-sn)
         devices = self._run_nmap_scan(subnet)
@@ -440,6 +447,15 @@ class NetworkScanner:
             
             if not mac_address or not ip_address:
                 continue
+                
+            # Skip if this device is already being processed in this scan cycle
+            # This prevents duplicate entries with the same MAC address
+            if mac_address in self.processing_devices:
+                self.logger.debug(f"Skipping duplicate device: {mac_address} ({ip_address})")
+                continue
+                
+            # Mark this device as being processed
+            self.processing_devices.add(mac_address)
             
             # Add to current scan devices
             self.current_scan_devices.add(mac_address)
@@ -614,6 +630,12 @@ class NetworkScanner:
         offline_devices = self.previous_scan_devices - self.current_scan_devices
         
         for mac_address in offline_devices:
+            # Double-check that this device is truly offline and not just processed earlier
+            # This prevents a device from being marked as both online and offline in the same scan
+            if mac_address in self.processing_devices:
+                self.logger.debug(f"Device {mac_address} was already processed in this scan, not marking as offline")
+                continue
+                
             device = self.db_manager.get_device(mac_address)
             if not device:
                 continue
