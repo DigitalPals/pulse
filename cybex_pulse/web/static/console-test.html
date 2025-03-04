@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console Stream Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #console {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+        .error {
+            color: red;
+        }
+        .warning {
+            color: orange;
+        }
+        .info {
+            color: blue;
+        }
+        .timestamp {
+            color: #666;
+            margin-right: 10px;
+        }
+        #status {
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Console Stream Test</h1>
+    <div id="status" class="connecting">Connecting...</div>
+    <div id="console"></div>
+    <button id="clear">Clear Console</button>
+    <button id="reconnect">Reconnect</button>
+
+    <script>
+        // Get DOM elements
+        const consoleElement = document.getElementById('console');
+        const statusElement = document.getElementById('status');
+        const clearButton = document.getElementById('clear');
+        const reconnectButton = document.getElementById('reconnect');
+        
+        // Variables
+        let eventSource = null;
+        
+        // Function to connect to the console stream
+        function connectToStream() {
+            // Update status
+            statusElement.textContent = 'Connecting...';
+            statusElement.className = 'connecting';
+            
+            // Log connection attempt
+            addMessage('Connecting to console stream...', 'info');
+            
+            try {
+                // Create EventSource
+                eventSource = new EventSource('/console-stream');
+                
+                // Handle connection open
+                eventSource.onopen = function(event) {
+                    console.log('Connection opened', event);
+                    statusElement.textContent = 'Connected';
+                    statusElement.className = 'connected';
+                    addMessage('Connected to console stream', 'info');
+                };
+                
+                // Handle messages
+                eventSource.addEventListener('message', function(event) {
+                    console.log('Message received', event);
+                    try {
+                        const data = JSON.parse(event.data);
+                        addMessage(data.message, data.type, data.timestamp);
+                    } catch (e) {
+                        console.error('Error parsing message:', e);
+                        addMessage('Error parsing message: ' + e.message, 'error');
+                    }
+                });
+                
+                // Handle errors
+                eventSource.onerror = function(event) {
+                    console.error('EventSource error', event);
+                    statusElement.textContent = 'Disconnected';
+                    statusElement.className = 'disconnected';
+                    addMessage('Connection to console stream lost', 'error');
+                    
+                    // Close the connection
+                    eventSource.close();
+                    eventSource = null;
+                };
+            } catch (e) {
+                console.error('Error connecting to console stream:', e);
+                statusElement.textContent = 'Connection Failed';
+                statusElement.className = 'disconnected';
+                addMessage('Failed to connect to console stream: ' + e.message, 'error');
+            }
+        }
+        
+        // Function to add a message to the console
+        function addMessage(message, type, timestamp) {
+            const messageElement = document.createElement('div');
+            messageElement.className = type || 'info';
+            
+            // Add timestamp
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'timestamp';
+            timestampSpan.textContent = timestamp || new Date().toISOString().replace('T', ' ').substr(0, 19);
+            messageElement.appendChild(timestampSpan);
+            
+            // Add message
+            const messageText = document.createTextNode(message);
+            messageElement.appendChild(messageText);
+            
+            // Add to console
+            consoleElement.appendChild(messageElement);
+            
+            // Auto-scroll to bottom
+            consoleElement.scrollTop = consoleElement.scrollHeight;
+        }
+        
+        // Clear console button
+        clearButton.addEventListener('click', function() {
+            consoleElement.innerHTML = '';
+            addMessage('Console cleared', 'info');
+        });
+        
+        // Reconnect button
+        reconnectButton.addEventListener('click', function() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            connectToStream();
+        });
+        
+        // Clean up when leaving the page
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+        
+        // Connect when the page loads
+        connectToStream();
+    </script>
+</body>
+</html>
