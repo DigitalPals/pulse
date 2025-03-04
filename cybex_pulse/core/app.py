@@ -869,7 +869,16 @@ class CybexPulseApp:
         self.cleanup()
         
         if progress_callback:
-            progress_callback("Restarting application...")
+            progress_callback("Restarting application. The console will reconnect automatically when the system is back online...")
             
-        # Restart the application
-        self.update_checker.restart_application()
+        try:
+            # Restart the application
+            self.update_checker.restart_application()
+        except Exception as e:
+            self.logger.error(f"Error during restart: {e}")
+            if progress_callback:
+                progress_callback(f"Error during restart: {e}. Please restart the application manually.", is_error=True)
+                
+            # Import traceback for detailed error information
+            import traceback
+            self.logger.error(f"Restart error details: {traceback.format_exc()}")

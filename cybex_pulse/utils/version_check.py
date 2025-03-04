@@ -346,9 +346,25 @@ class UpdateChecker:
             system = platform.system().lower()
             
             if system == "linux" or system == "darwin":
-                # Use execv on Unix-like systems
+                # Use subprocess instead of execv to avoid permission issues
                 self.logger.info(f"Restarting application with: {current_script}")
-                os.execv(current_script, [current_script])
+                try:
+                    # Try using sudo if available (for handling permission issues)
+                    if os.path.exists("/usr/bin/sudo") and os.access("/usr/bin/sudo", os.X_OK):
+                        self.logger.info("Using sudo to restart application")
+                        subprocess.Popen(["sudo", current_script], close_fds=True)
+                    else:
+                        # Fall back to direct execution
+                        subprocess.Popen([current_script], close_fds=True)
+                    
+                    # Exit the current process
+                    self.logger.info("Exiting current process to complete restart")
+                    os._exit(0)
+                except subprocess.SubprocessError as e:
+                    self.logger.error(f"Failed to restart using subprocess: {e}")
+                    # Fall back to execv as a last resort
+                    self.logger.info("Falling back to execv for restart")
+                    os.execv(current_script, [current_script])
             elif system == "windows":
                 # Use subprocess on Windows
                 self.logger.info(f"Restarting application with: {current_script}")
@@ -358,6 +374,9 @@ class UpdateChecker:
                 self.logger.error(f"Unsupported platform for restart: {system}")
         except Exception as e:
             self.logger.error(f"Failed to restart application: {e}")
+            # Log more detailed error information
+            import traceback
+            self.logger.error(f"Restart error details: {traceback.format_exc()}")
     
     def start_checker_thread(self) -> None:
         """Start the update checker thread."""

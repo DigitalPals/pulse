@@ -279,6 +279,15 @@
     // Deferred loading of console stream
     let streamInitialized = false;
     
+    // Variables for restart detection and availability checking
+    let restartDetected = false;
+    let availabilityCheckInterval = null;
+    
+    // Track reconnection attempts for exponential backoff and restart detection
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY = 30000; // Maximum reconnect delay of 30 seconds
+    const MAX_RECONNECT_ATTEMPTS = 30; // Try for about 5 minutes (10s between attempts)
+    
     // Connect to the console stream when the page loads
     document.addEventListener('DOMContentLoaded', function() {
         // Cache DOM elements for better performance
@@ -291,6 +300,9 @@
         setTimeout(function() {
             connectToConsoleStream();
             streamInitialized = true;
+            
+            // Ensure console is scrolled to bottom on initial load
+            scrollToBottom();
         }, 500);
         
         // Set up periodic refresh of system information (less frequent)
@@ -515,10 +527,7 @@
     // Cache DOM elements for console status
     let consoleStatusElement = null;
     
-    // Track reconnection attempts for exponential backoff
-    let reconnectAttempts = 0;
-    const MAX_RECONNECT_DELAY = 30000; // Maximum reconnect delay of 30 seconds
-    
+    // Function to connect to the console stream
     function connectToConsoleStream() {
         // Cache console status element
         if (!consoleStatusElement) {
@@ -561,11 +570,37 @@
                 try {
                     const data = JSON.parse(event.data);
                     
-                    // Add message to queue
-                    messageQueue.push({
-                        message: data.message,
-                        type: data.is_error ? "error" : "info"
-                    });
+                    // Check if this is a restart message
+                    if (data.message && (
+                        data.message.includes("restart") ||
+                        data.message.includes("Restart") ||
+                        data.message.includes("restarting") ||
+                        data.message.includes("Restarting")
+                    )) {
+                        // Mark restart as detected
+                        restartDetected = true;
+                        
+                        // Add a more informative message to the queue
+                        messageQueue.push({
+                            message: data.message,
+                            type: data.is_error ? "error" : "info"
+                        });
+                        
+                        // Add our own message about waiting for the application
+                        messageQueue.push({
+                            message: "Application is restarting. Please wait while the system comes back online...",
+                            type: "info"
+                        });
+                        
+                        // Start checking for application availability
+                        startAvailabilityCheck();
+                    } else {
+                        // Regular message, add to queue
+                        messageQueue.push({
+                            message: data.message,
+                            type: data.is_error ? "error" : "info"
+                        });
+                    }
                     
                     // Process queue if not already processing
                     if (!processingQueue) {
@@ -635,7 +670,18 @@
             }
             // Check if the connection was lost after being established
             else if (consoleEventSource.readyState === 2) {
-                appendToConsole('Connection to console stream lost. Attempting to reconnect...', "warning");
+                // If we detect a message about restarting, mark as restart detected
+                if (!restartDetected) {
+                    appendToConsole('Connection to console stream lost. This may be due to application restart.', "warning");
+                    appendToConsole('Waiting for application to become available again...', "info");
+                    restartDetected = true;
+                    
+                    // Start checking for application availability
+                    startAvailabilityCheck();
+                } else {
+                    appendToConsole('Connection to console stream lost. Attempting to reconnect...', "warning");
+                }
+                
                 if (consoleStatusElement) {
                     consoleStatusElement.textContent = 'Disconnected';
                     consoleStatusElement.className = 'badge badge-warning';
@@ -648,12 +694,71 @@
     // Function to schedule reconnection with exponential backoff
     function scheduleReconnect() {
         reconnectAttempts++;
-        // Calculate delay with exponential backoff: 1s, 2s, 4s, 8s, etc. up to MAX_RECONNECT_DELAY
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
         
-        appendToConsole(`Reconnecting in ${delay/1000} seconds (attempt ${reconnectAttempts})...`, "info");
+        // If we've detected a restart, use a fixed interval instead of exponential backoff
+        if (restartDetected) {
+            const delay = 10000; // Fixed 10 second delay during restart
+            
+            if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                appendToConsole(`Checking if application is available... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, "info");
+                setTimeout(connectToConsoleStream, delay);
+            } else {
+                appendToConsole("Maximum reconnection attempts reached. Please refresh the page manually.", "error");
+                stopAvailabilityCheck();
+            }
+        } else {
+            // Normal exponential backoff for non-restart connection issues
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+            appendToConsole(`Reconnecting in ${delay/1000} seconds (attempt ${reconnectAttempts})...`, "info");
+            setTimeout(connectToConsoleStream, delay);
+        }
+    }
+    
+    // Function to start checking for application availability
+    function startAvailabilityCheck() {
+        if (availabilityCheckInterval) {
+            clearInterval(availabilityCheckInterval);
+        }
         
-        setTimeout(connectToConsoleStream, delay);
+        // Check server availability every 5 seconds
+        availabilityCheckInterval = setInterval(checkServerAvailability, 5000);
+    }
+    
+    // Function to stop checking for application availability
+    function stopAvailabilityCheck() {
+        if (availabilityCheckInterval) {
+            clearInterval(availabilityCheckInterval);
+            availabilityCheckInterval = null;
+        }
+        restartDetected = false;
+    }
+    
+    // Function to check if the server is available
+    function checkServerAvailability() {
+        fetch('/api/system-info', {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache' },
+            // Add a timestamp to prevent caching
+            cache: 'no-store'
+        })
+        .then(response => {
+            if (response.ok) {
+                // Server is available again
+                appendToConsole("Application is back online! Reconnecting to console stream...", "info");
+                stopAvailabilityCheck();
+                connectToConsoleStream();
+                
+                // Reset reconnect attempts
+                reconnectAttempts = 0;
+                
+                // Update system info
+                refreshSystemInfo();
+            }
+        })
+        .catch(error => {
+            // Server still unavailable, will try again on next interval
+            console.log("Server still unavailable:", error);
+        });
     }
     
     // Cache DOM elements for console output
