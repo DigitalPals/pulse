@@ -178,10 +178,10 @@ class HttpScanner(ScannerMixin):
         # Configure session with default settings
         self.session.verify = False
         self.session.headers.update({"User-Agent": "Pulse-NetworkScanner/1.0"})
-        # Configure connection pooling
+        # Configure connection pooling with smaller pool size to avoid resource exhaustion
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=20,
+            pool_connections=5,
+            pool_maxsize=10,
             max_retries=0,
             pool_block=False
         )
@@ -371,9 +371,21 @@ class HttpScanner(ScannerMixin):
         """Ensure proper cleanup of resources."""
         if hasattr(self, 'session'):
             try:
+                # Force close all adapters and their connection pools
+                for adapter in self.session.adapters.values():
+                    if hasattr(adapter, 'close'):
+                        adapter.close()
+                
+                # Close the session itself
                 self.session.close()
-            except Exception:
-                pass
+                
+                # Clear any references to help garbage collection
+                self.session = None
+                
+                # Log cleanup
+                logger.debug("HTTP scanner session and connection pools closed")
+            except Exception as e:
+                logger.debug(f"Error closing HTTP scanner session: {e}")
 
 
 class SnmpScanner(ScannerMixin):
@@ -692,7 +704,36 @@ class DeviceFingerprinter:
             'mdns_scan': timeout * 0.5  # Reduce mdns_scan timeout to avoid long waits
         }
         
+        # Check for global stop event
+        import threading
+        global_stop_event = None
+        for thread in threading.enumerate():
+            if thread.name == "NetworkScanner" and hasattr(thread, "_target") and hasattr(thread._target, "__self__"):
+                target_self = thread._target.__self__
+                if hasattr(target_self, "thread_manager") and hasattr(target_self.thread_manager, "global_stop_event"):
+                    global_stop_event = target_self.thread_manager.global_stop_event
+                    break
+        
         while remaining_futures and (time.time() - start_time) < timeout:
+            # Check if application is shutting down
+            if global_stop_event and global_stop_event.is_set():
+                logger.info("Global stop event detected, cancelling all fingerprinting operations")
+                # Cancel all remaining futures immediately
+                for name, future in remaining_futures:
+                    future.cancel()
+                    # Add empty result for this component
+                    if name == 'port_scan':
+                        device_data.update({'open_ports': []})
+                    elif name == 'http_scan':
+                        device_data.update({'http_headers': {}})
+                    elif name == 'snmp_scan':
+                        device_data.update({'snmp_data': {}})
+                    elif name == 'mdns_scan':
+                        device_data.update({'mdns_data': {}})
+                # Clear the remaining futures list
+                remaining_futures.clear()
+                break
+            
             # Process any completed futures
             for name, future in list(remaining_futures):
                 if future.done():
@@ -969,3 +1010,30 @@ class DeviceFingerprinter:
             self.fingerprinted_mac_addresses.clear()
             self.fingerprint_timestamps.clear()
             logger.info("Cleared all fingerprinting caches")
+            
+    def shutdown(self) -> None:
+        """Properly shutdown the fingerprinter and clean up resources.
+        
+        This method should be called when the application is shutting down
+        to ensure all resources are properly released.
+        """
+        logger.info("Shutting down device fingerprinter")
+        
+        # Clear all caches
+        self.clear_all_caches()
+        
+        # Close HTTP scanner session
+        if hasattr(self, 'http_scanner') and hasattr(self.http_scanner, 'session'):
+            try:
+                # Force close all adapters and their connection pools
+                for adapter in self.http_scanner.session.adapters.values():
+                    if hasattr(adapter, 'close'):
+                        adapter.close()
+                
+                # Close the session itself
+                self.http_scanner.session.close()
+                logger.debug("HTTP scanner session closed during shutdown")
+            except Exception as e:
+                logger.debug(f"Error closing HTTP scanner session during shutdown: {e}")
+        
+        logger.info("Device fingerprinter shutdown complete")

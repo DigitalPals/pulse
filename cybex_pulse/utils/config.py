@@ -15,6 +15,7 @@ class Config:
         "general": {
             "scan_interval": 60,  # seconds
             "configured": False,
+            "debug_logging": False,  # Enable/disable debug logging
         },
         "network": {
             "subnet": "",  # Will be auto-detected during setup

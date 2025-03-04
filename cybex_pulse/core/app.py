@@ -39,8 +39,8 @@ class CybexPulseApp:
         self.db_manager = db_manager
         self.logger = logger
         
-        # Initialize thread manager
-        self.thread_manager = ThreadManager(logger)
+        # Initialize thread manager with config for debug logging
+        self.thread_manager = ThreadManager(logger, config)
         
         # Initialize components
         self.alert_manager = AlertManager(config, db_manager, logger)
@@ -150,6 +150,13 @@ class CybexPulseApp:
             except Exception as e:
                 self.logger.error(f"Error shutting down web server: {e}")
         
+        # Shutdown fingerprinting manager to properly close HTTP connections
+        try:
+            self.logger.info("Shutting down fingerprinting manager...")
+            self.fingerprinting_manager.shutdown()
+        except Exception as e:
+            self.logger.error(f"Error shutting down fingerprinting manager: {e}")
+        
         # Stop all threads
         self.thread_manager.stop_all_threads()
         
@@ -161,6 +168,9 @@ class CybexPulseApp:
         """Run the network scanner in a loop."""
         self.logger.info("Starting network scanner")
         
+        # Counter for periodic checks
+        cycle_count = 0
+        
         while not self.thread_manager.global_stop_event.is_set():
             try:
                 # Run network scan
@@ -168,13 +178,21 @@ class CybexPulseApp:
                 self.network_scanner.scan()
                 self.logger.info("Network scan cycle completed")
                 
+                # Increment cycle count
+                cycle_count += 1
+                
+                # Every 5 cycles, check for deadlocks and resource leaks if debug logging is enabled
+                if cycle_count % 5 == 0 and self.config.get("general", "debug_logging", False):
+                    self.thread_manager.check_for_deadlocks()
+                    self.thread_manager.check_for_resource_leaks()
+                
                 # Sleep for the configured interval
                 scan_interval = self.config.get("general", "scan_interval")
                 self.logger.info(f"Sleeping for {scan_interval} seconds until next network scan")
                 
                 # Use thread manager's sleep with check
                 if not self.thread_manager.sleep_with_check(
-                    scan_interval, 
+                    scan_interval,
                     self.thread_manager.global_stop_event
                 ):
                     break
@@ -182,7 +200,7 @@ class CybexPulseApp:
                 self.logger.error(f"Error in network scanner: {e}")
                 # Sleep for a short time before retrying
                 if not self.thread_manager.sleep_with_check(
-                    10, 
+                    10,
                     self.thread_manager.global_stop_event
                 ):
                     break

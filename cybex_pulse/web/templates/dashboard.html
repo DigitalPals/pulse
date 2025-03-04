@@ -86,16 +86,20 @@
             <div class="stat-value">
                 {% if speed_tests %}
                     {% set latest_test = speed_tests|sort(attribute='timestamp')|last %}
-                    {% set ping = latest_test.ping|default(0) %}
-                    {% set download = latest_test.download_speed|default(0) %}
-                    {% set upload = latest_test.upload_speed|default(0) %}
+                    {% set ping = latest_test.ping %}
+                    {% set download = latest_test.download_speed %}
+                    {% set upload = latest_test.upload_speed %}
                     
-                    {% if ping < 50 and download > 10 and upload > 5 %}
-                        <span class="status-badge-online"><i class="fas fa-check-circle"></i> Good</span>
-                    {% elif ping < 100 and download > 5 and upload > 2 %}
-                        <span class="status-badge-unknown"><i class="fas fa-exclamation-circle"></i> Fair</span>
+                    {% if ping is not none and download is not none and upload is not none %}
+                        {% if ping < 50 and download > 10 and upload > 5 %}
+                            <span class="status-badge-online"><i class="fas fa-check-circle"></i> Good</span>
+                        {% elif ping < 100 and download > 5 and upload > 2 %}
+                            <span class="status-badge-unknown"><i class="fas fa-exclamation-circle"></i> Fair</span>
+                        {% else %}
+                            <span class="status-badge-offline"><i class="fas fa-times-circle"></i> Poor</span>
+                        {% endif %}
                     {% else %}
-                        <span class="status-badge-offline"><i class="fas fa-times-circle"></i> Poor</span>
+                        <span class="status-badge-unknown"><i class="fas fa-question-circle"></i> Unknown</span>
                     {% endif %}
                 {% else %}
                     <span class="status-badge-unknown"><i class="fas fa-question-circle"></i> Unknown</span>

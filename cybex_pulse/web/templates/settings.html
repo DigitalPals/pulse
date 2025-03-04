@@ -708,6 +708,21 @@
                 <p class="text-muted">These options perform actions that cannot be undone. Use with caution.</p>
             </div>
             <div class="card-body">
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" id="debug_logging" name="debug_logging" class="form-check-input" {% if config.general.debug_logging %}checked{% endif %}>
+                        <label for="debug_logging" class="form-check-label">
+                            <span class="setting-title">Enable Debug Logging</span>
+                            <span class="setting-desc">Log detailed debug information for troubleshooting</span>
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle"></i> Debug logging provides detailed information about application operations, but may impact performance and generate large log files.
+                    </small>
+                </div>
+                
+                <div class="section-divider"></div>
+                
                 <div class="advanced-options">
                     <div class="advanced-option">
                         <div class="option-info">

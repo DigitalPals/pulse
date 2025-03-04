@@ -14,6 +14,8 @@ import subprocess
 import time
 from typing import Dict, List, Optional, Set, Tuple, Any
 
+from cybex_pulse.utils.debug_logger import DebugLogger
+
 from cybex_pulse.core.alerting import AlertManager
 from cybex_pulse.core.fingerprinting_manager import FingerprintingManager
 from cybex_pulse.database.db_manager import DatabaseManager
@@ -56,44 +58,102 @@ class NetworkScanner:
         # Keep track of devices that are currently being processed
         # to prevent duplicate entries during a single scan
         self.processing_devices = set()
+        
+        # Debug logger
+        self.debug = None
+        if config:
+            self.debug = DebugLogger(logger, config)
     
     def scan(self) -> None:
         """Scan the network for devices."""
         self.logger.info("Starting network scan")
         
-        # Get subnet from config
-        subnet = self.config.get("network", "subnet")
-        if not subnet:
-            self.logger.error("Subnet not configured")
-            return
-        
-        # Clear current scan devices
-        self.current_scan_devices = set()
-        
-        # Clear processing devices for this scan cycle
-        self.processing_devices = set()
-        
-        # Run network scan using nmap ping scan (-sn)
-        devices = self._run_nmap_scan(subnet)
-        if not devices and self.config.get("network", "fallback_to_arp_scan", True):
-            # Fall back to arp-scan if nmap fails
-            self.logger.info("Falling back to arp-scan")
-            devices = self._run_arp_scan(subnet)
-        
-        if devices is None:
-            self.logger.error("Network scan failed")
-            return
-        
-        # Process scan results
-        self._process_scan_results(devices)
-        
-        # Check for devices that went offline
-        self._check_offline_devices()
-        
-        # Update previous scan devices
-        self.previous_scan_devices = self.current_scan_devices.copy()
-        
-        self.logger.info(f"Network scan completed, found {len(devices)} devices")
+        try:
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.start_timer("network_scan")
+                self.debug.debug("Starting network scan")
+            
+            # Get subnet from config
+            subnet = self.config.get("network", "subnet")
+            if not subnet:
+                self.logger.error("Subnet not configured")
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.debug("Network scan aborted: Subnet not configured")
+                return
+            
+            # Clear current scan devices
+            self.current_scan_devices = set()
+            
+            # Clear processing devices for this scan cycle
+            self.processing_devices = set()
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.debug(f"Scanning subnet: {subnet}")
+                self.debug.start_timer("nmap_scan")
+            
+            # Run network scan using nmap ping scan (-sn)
+            devices = self._run_nmap_scan(subnet)
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.end_timer("nmap_scan")
+                if devices:
+                    self.debug.debug(f"Nmap scan found {len(devices)} devices")
+                else:
+                    self.debug.debug("Nmap scan found no devices, falling back to arp-scan")
+            
+            if not devices and self.config.get("network", "fallback_to_arp_scan", True):
+                # Fall back to arp-scan if nmap fails
+                self.logger.info("Falling back to arp-scan")
+                
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.start_timer("arp_scan")
+                    
+                devices = self._run_arp_scan(subnet)
+                
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.end_timer("arp_scan")
+                    if devices:
+                        self.debug.debug(f"Arp-scan found {len(devices)} devices")
+                    else:
+                        self.debug.debug("Arp-scan found no devices")
+            
+            if devices is None:
+                self.logger.error("Network scan failed")
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.debug("Network scan failed: Both nmap and arp-scan returned no results")
+                return
+            
+            # Process scan results
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.start_timer("process_scan_results")
+                self.debug.debug(f"Processing scan results for {len(devices)} devices")
+                
+            self._process_scan_results(devices)
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.end_timer("process_scan_results")
+                self.debug.debug(f"Processed {len(self.current_scan_devices)} unique devices")
+            
+            # Check for devices that went offline
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.start_timer("check_offline_devices")
+                
+            self._check_offline_devices()
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.end_timer("check_offline_devices")
+            
+            # Update previous scan devices
+            self.previous_scan_devices = self.current_scan_devices.copy()
+            
+            self.logger.info(f"Network scan completed, found {len(devices)} devices")
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.end_timer("network_scan")
+                self.debug.debug(f"Network scan completed in {self.debug.end_timer('network_scan')} seconds")
+        finally:
+            # Ensure database connection is closed after scan
+            self.db_manager.close()
     
     def _run_nmap_scan(self, subnet: str) -> Optional[List[Dict[str, str]]]:
         """Run nmap ping scan (-sn) on the specified subnet.
@@ -110,6 +170,11 @@ class NetworkScanner:
             # Run nmap ping scan command
             cmd = ["nmap", "-sn", subnet]
             
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.debug(f"Executing command: {' '.join(cmd)}")
+                self.debug.start_timer("nmap_subprocess")
+                self.debug.track_resource(f"nmap_process_{subnet}", "subprocess")
+            
             try:
                 result = subprocess.run(
                     cmd,
@@ -118,7 +183,20 @@ class NetworkScanner:
                     check=True,
                     timeout=60
                 )
-            except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.end_timer("nmap_subprocess")
+                    self.debug.debug(f"Command completed with return code: {result.returncode}")
+                    self.debug.release_resource(f"nmap_process_{subnet}")
+                    
+            except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.debug(f"Command failed: {e}, trying with sudo")
+                    self.debug.end_timer("nmap_subprocess")
+                    self.debug.release_resource(f"nmap_process_{subnet}")
+                    self.debug.start_timer("sudo_nmap_subprocess")
+                    self.debug.track_resource(f"sudo_nmap_process_{subnet}", "subprocess")
+                
                 # If that fails, try with sudo
                 cmd = ["sudo", "nmap", "-sn", subnet]
                 result = subprocess.run(
@@ -128,19 +206,49 @@ class NetworkScanner:
                     check=True,
                     timeout=60
                 )
+                
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.end_timer("sudo_nmap_subprocess")
+                    self.debug.debug(f"Sudo command completed with return code: {result.returncode}")
+                    self.debug.release_resource(f"sudo_nmap_process_{subnet}")
             
             # Parse text output
-            return self._parse_nmap_scan_text(result.stdout)
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.start_timer("parse_nmap_output")
+                
+            parsed_results = self._parse_nmap_scan_text(result.stdout)
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.end_timer("parse_nmap_output")
+                self.debug.debug(f"Parsed {len(parsed_results) if parsed_results else 0} devices from nmap output")
+                
+            return parsed_results
+            
         except subprocess.SubprocessError as e:
             self.logger.warning(f"Error running nmap scan: {e}")
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.debug(f"Subprocess error in nmap scan: {e}")
+                # Make sure to release any tracked resources
+                self.debug.release_resource(f"nmap_process_{subnet}")
+                self.debug.release_resource(f"sudo_nmap_process_{subnet}")
             
             # Check if command not found
             if isinstance(e, subprocess.CalledProcessError) and e.returncode == 127:
                 self.logger.warning("nmap command not found. Please install nmap.")
+                if self.debug and self.debug.is_debug_enabled():
+                    self.debug.debug("nmap command not found (error code 127)")
             
             return None
         except Exception as e:
             self.logger.warning(f"Unexpected error running nmap scan: {e}")
+            
+            if self.debug and self.debug.is_debug_enabled():
+                self.debug.debug(f"Unexpected exception in nmap scan: {type(e).__name__}: {e}")
+                # Make sure to release any tracked resources
+                self.debug.release_resource(f"nmap_process_{subnet}")
+                self.debug.release_resource(f"sudo_nmap_process_{subnet}")
+                
             return None
     
     def _parse_nmap_scan_text(self, output: str) -> List[Dict[str, str]]:

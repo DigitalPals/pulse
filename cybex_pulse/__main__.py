@@ -15,8 +15,23 @@ from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
 from cybex_pulse.utils.version_manager import version_manager
 
-def setup_logging():
-    """Configure application logging."""
+def setup_logging(config=None):
+    """Configure application logging.
+    
+    Args:
+        config: Optional Config object to check for debug_logging setting
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    # Import the async logging module
+    from cybex_pulse.utils.async_logging import async_log_manager
+    
+    # Determine log level based on config if provided
+    log_level = logging.INFO
+    if config and config.get("general", "debug_logging", False):
+        log_level = logging.DEBUG
+        
     # Try to use /var/log/cybex_pulse if running as a service, otherwise fallback to home directory
     if os.access('/var/log', os.W_OK):
         log_dir = Path('/var/log/cybex_pulse')
@@ -29,7 +44,7 @@ def setup_logging():
     except (PermissionError, OSError):
         # If we can't create the log directory, use stderr only
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             handlers=[logging.StreamHandler(sys.stderr)]
         )
@@ -40,19 +55,53 @@ def setup_logging():
     log_file = log_dir / "cybex_pulse.log"
     
     try:
+        # Create handlers
         file_handler = logging.FileHandler(log_file)
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            handlers=[
-                file_handler,
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        
+        # Set formatters
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(formatter)
+        stdout_handler.setFormatter(formatter)
+        
+        # Create a separate debug log file if debug logging is enabled
+        debug_handlers = []
+        if log_level == logging.DEBUG:
+            debug_log_file = log_dir / "cybex_pulse_debug.log"
+            try:
+                debug_file_handler = logging.FileHandler(debug_log_file)
+                debug_file_handler.setLevel(logging.DEBUG)
+                debug_file_handler.setFormatter(formatter)
+                debug_handlers.append(debug_file_handler)
+            except (PermissionError, OSError) as e:
+                logger = logging.getLogger("cybex_pulse")
+                logger.warning(f"Could not create debug log file: {e}")
+        
+        # Configure the root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        
+        # Clear any existing handlers to avoid duplicates
+        for handler in list(root_logger.handlers):
+            root_logger.removeHandler(handler)
+            
+        # Add our handlers
+        for handler in [file_handler, stdout_handler, *debug_handlers]:
+            root_logger.addHandler(handler)
+            
+        # Get the application logger
+        logger = logging.getLogger("cybex_pulse")
+        
+        # Set up asynchronous logging
+        async_log_manager.setup_async_logging()
+        
+        if log_level == logging.DEBUG:
+            logger.debug(f"Debug logging enabled. Debug logs will be written to {debug_log_file}")
+            logger.debug("Asynchronous logging enabled with QueueHandler and QueueListener")
     except (PermissionError, OSError):
         # If we can't write to the log file, use stderr only
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             handlers=[logging.StreamHandler(sys.stderr)]
         )
@@ -60,7 +109,7 @@ def setup_logging():
         logger.warning(f"Could not write to log file {log_file}. Logging to stderr only.")
         return logger
     
-    return logging.getLogger("cybex_pulse")
+    return logger
 
 def main():
     """Main function to start the Cybex Pulse application."""
@@ -68,7 +117,38 @@ def main():
     import os
     from pathlib import Path
     
-    logger = setup_logging()
+    # Parse command line arguments first
+    parser = argparse.ArgumentParser(description="Cybex Pulse - Home Network Monitoring")
+    parser.add_argument("--config", help="Path to configuration file")
+    parser.add_argument("--reset", action="store_true", help="Reset configuration and start setup wizard")
+    parser.add_argument("--console-setup", action="store_true", help="Use console setup wizard instead of web interface")
+    args = parser.parse_args()
+    
+    # Initialize configuration first (without logging)
+    # Try to use /var/lib/cybex_pulse if running as a service, otherwise fallback to home directory
+    if os.access('/var/lib', os.W_OK):
+        data_dir = Path('/var/lib/cybex_pulse')
+    else:
+        data_dir = Path.home() / ".cybex_pulse"
+    
+    # Create data directory if it doesn't exist
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        # Can't log this error yet since logger isn't set up
+        data_dir = Path.home() / ".cybex_pulse"
+        data_dir.mkdir(parents=True, exist_ok=True)
+    
+    config_path = args.config if args.config else data_dir / "config.json"
+    db_path = data_dir / "cybex_pulse.db"
+    
+    # Load configuration first to determine debug level
+    config = Config(config_path)
+    
+    # Now set up logging with the config
+    logger = setup_logging(config)
+    
+    logger.info(f"Using data directory: {data_dir}")
     
     # Get version information
     try:
@@ -90,39 +170,9 @@ def main():
         logger.error(f"Error determining version: {e}")
         logger.info("Starting Cybex Pulse")
     
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Cybex Pulse - Home Network Monitoring")
-    parser.add_argument("--config", help="Path to configuration file")
-    parser.add_argument("--reset", action="store_true", help="Reset configuration and start setup wizard")
-    parser.add_argument("--console-setup", action="store_true", help="Use console setup wizard instead of web interface")
-    args = parser.parse_args()
-    
-    # Initialize configuration
-    # Try to use /var/lib/cybex_pulse if running as a service, otherwise fallback to home directory
-    if os.access('/var/lib', os.W_OK):
-        data_dir = Path('/var/lib/cybex_pulse')
-    else:
-        data_dir = Path.home() / ".cybex_pulse"
-    
-    logger.info(f"Using data directory: {data_dir}")
-    
-    # Create data directory if it doesn't exist
-    try:
-        data_dir.mkdir(parents=True, exist_ok=True)
-    except (PermissionError, OSError):
-        logger.error("Could not create data directory. Using home directory as fallback.")
-        data_dir = Path.home() / ".cybex_pulse"
-        data_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_path = args.config if args.config else data_dir / "config.json"
-    db_path = data_dir / "cybex_pulse.db"
-    
     # Initialize database
     db_manager = DatabaseManager(db_path)
     db_manager.initialize_database()
-    
-    # Load or create configuration
-    config = Config(config_path)
     
     # Only run the setup wizard in console mode if explicitly requested with --console-setup
     if args.reset or (args.console_setup and not config.is_configured()):

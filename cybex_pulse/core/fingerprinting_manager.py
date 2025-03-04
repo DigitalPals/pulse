@@ -85,6 +85,24 @@ class FingerprintingManager:
             self.config.get("fingerprinting", "enabled", False) and
             self.fingerprinter is not None
         )
+        
+    def shutdown(self) -> None:
+        """Shutdown the fingerprinting manager and release resources.
+        
+        This method should be called during application shutdown to ensure
+        all resources are properly released, especially HTTP connections.
+        """
+        self.logger.info("Shutting down fingerprinting manager")
+        
+        if self.fingerprinter:
+            try:
+                # Call the fingerprinter's shutdown method to clean up resources
+                self.fingerprinter.shutdown()
+                self.fingerprinter = None
+            except Exception as e:
+                self.logger.error(f"Error shutting down fingerprinter: {e}")
+                
+        self.logger.info("Fingerprinting manager shutdown complete")
     
     def should_fingerprint_device(self, device: Dict[str, Any], force_scan: bool = False) -> bool:
         """Check if a device should be fingerprinted.

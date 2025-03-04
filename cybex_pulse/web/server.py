@@ -13,6 +13,7 @@ from cybex_pulse.database.db_manager import DatabaseManager
 from cybex_pulse.utils.config import Config
 from cybex_pulse.utils.system_check import check_required_tools, get_installation_instructions
 from cybex_pulse.utils.version_manager import version_manager
+from cybex_pulse.utils.async_logging import async_log_manager
 from cybex_pulse.web.utils.network import get_local_ip
 from cybex_pulse.web.filters import register_filters
 from cybex_pulse.web.routes import register_routes
@@ -78,12 +79,22 @@ class WebServer:
         
         # Register all routes
         self._register_routes()
-    
+        
+        # Register teardown function to close database connections after each request
+        @self.app.teardown_request
+        def close_db_connection(exception=None):
+            """Close database connection after each request."""
+            if hasattr(self, 'db_manager'):
+                self.db_manager.close()
     def start(self) -> None:
         """Start the web server."""
         if not hasattr(self, 'app'):
             self.logger.error("Flask not installed. Web interface not started.")
             return
+        
+        # Set up asynchronous logging for Werkzeug to prevent lock contention
+        async_log_manager.patch_werkzeug_logger()
+        self.logger.debug("Werkzeug logger patched with asynchronous logging")
         
         host = self.config.get("web_interface", "host")
         port = self.config.get("web_interface", "port")
@@ -102,6 +113,7 @@ class WebServer:
         self.server = self.werkzeug.serving.make_server(
             host, port, self.app, threaded=True
         )
+        self.server.serve_forever()
         self.server.serve_forever()
     
     def shutdown(self) -> None:
@@ -123,6 +135,13 @@ class WebServer:
                 
                 if shutdown_thread.is_alive():
                     self.logger.warning("Web server shutdown is taking longer than expected, continuing with application shutdown")
+                
+                # Clean up async logging resources for Werkzeug
+                from cybex_pulse.utils.async_logging import async_log_manager
+                if hasattr(async_log_manager, 'werkzeug_listener') and async_log_manager.werkzeug_listener:
+                    self.logger.debug("Cleaning up Werkzeug async logging resources")
+                    async_log_manager.werkzeug_listener.stop()
+                    async_log_manager.werkzeug_logger_patched = False
             except Exception as e:
                 self.logger.error(f"Error during web server shutdown: {e}")
     

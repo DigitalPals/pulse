@@ -336,7 +336,7 @@ def update_settings_from_form(server, form: Dict[str, str]) -> None:
         "security_scanning": server.config.get("monitoring", "security", {}).get("enabled", False)
     }
     
-    # Network settings
+    # General settings
     subnet = form.get('subnet')
     if subnet:
         server.config.set("network", "subnet", subnet)
@@ -344,6 +344,10 @@ def update_settings_from_form(server, form: Dict[str, str]) -> None:
     scan_interval = form.get('scan_interval')
     if scan_interval and scan_interval.isdigit() and int(scan_interval) > 0:
         server.config.set("general", "scan_interval", int(scan_interval))
+    
+    # Debug logging setting
+    debug_logging = form.get('debug_logging') == 'on'
+    server.config.set("general", "debug_logging", debug_logging)
     
     # Alert settings
     alerts_enabled = form.get('alerts_enabled') == 'on'

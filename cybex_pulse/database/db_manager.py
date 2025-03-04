@@ -30,7 +30,8 @@ class DatabaseManager:
         Creates a thread-local connection to ensure thread safety.
         """
         if not hasattr(self.local, 'conn') or self.local.conn is None:
-            self.local.conn = sqlite3.connect(self.db_path)
+            # Add timeout to prevent indefinite blocking on database locks
+            self.local.conn = sqlite3.connect(self.db_path, timeout=10.0)
             self.local.conn.row_factory = sqlite3.Row
         return self.local.conn
     

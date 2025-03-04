@@ -13,6 +13,7 @@ import time
 import threading
 from flask import Response, stream_with_context
 from cybex_pulse.utils.system_info import get_all_system_info
+from cybex_pulse.utils.async_logging import ThreadSafeConsoleStreamHandler
 
 # Constants for console configuration
 MAX_QUEUE_SIZE = 1000  # Maximum number of messages in queue
@@ -50,42 +51,8 @@ class RedirectStdStreams:
         sys.stdout = self.old_stdout
         sys.stderr = self.old_stderr
 
-
-class ConsoleStreamHandler(logging.Handler):
-    """Custom logging handler that puts logs into a queue for streaming."""
-    
-    def __init__(self, message_queue):
-        """Initialize the handler with a queue.
-        
-        Args:
-            message_queue: Queue to store log messages
-        """
-        super().__init__()
-        self.message_queue = message_queue
-        
-    def emit(self, record):
-        """Put the log record into the queue.
-        
-        Args:
-            record: Log record to process
-        """
-        try:
-            # Format the record
-            msg = self.format(record)
-            
-            # Determine message type based on log level
-            msg_type = "error" if record.levelno >= logging.ERROR else \
-                      "warning" if record.levelno >= logging.WARNING else "info"
-            
-            # Add to queue with type information
-            self.message_queue.put({
-                "message": msg,
-                "is_error": record.levelno >= logging.ERROR,
-                "type": msg_type,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-            })
-        except Exception:
-            self.handleError(record)
+# Use the thread-safe handler from async_logging module
+ConsoleStreamHandler = ThreadSafeConsoleStreamHandler
 
 
 class StreamToQueue(io.TextIOBase):
