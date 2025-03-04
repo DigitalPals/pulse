@@ -283,336 +283,211 @@
 
 {% block scripts %}
 <script src="/static/js/console-stream.js"></script>
-<script type="module">
-    // Console module - Refactored for better organization and performance
-    const ConsoleApp = (function() {
-        // Configuration constants
-        const CONFIG = {
-            MAX_MESSAGES: 500,
-            SYSTEM_INFO_REFRESH_INTERVAL: 10000,
-            LAST_UPDATED_REFRESH_INTERVAL: 30000,
-            AVAILABILITY_CHECK_INTERVAL: 5000,
-            MAX_RECONNECT_DELAY: 30000,
-            MAX_RECONNECT_ATTEMPTS: 30,
-            INITIAL_STREAM_DELAY: 500
-        };
-        
-        // State variables
-        let consoleEventSource = null;
-        let autoScroll = true;
-        let allMessages = [];
-        let currentFilter = 'all';
-        let searchTerm = '';
-        let streamInitialized = false;
-        let restartDetected = false;
-        let availabilityCheckInterval = null;
-        let reconnectAttempts = 0;
+<script>
+// Console module - Refactored for better organization and performance
+document.addEventListener('DOMContentLoaded', function() {
+    // Configuration constants
+    const CONFIG = {
+        MAX_MESSAGES: 500,
+        SYSTEM_INFO_REFRESH_INTERVAL: 10000,
+        LAST_UPDATED_REFRESH_INTERVAL: 30000,
+        AVAILABILITY_CHECK_INTERVAL: 5000,
+        MAX_RECONNECT_DELAY: 30000,
+        MAX_RECONNECT_ATTEMPTS: 30,
+        INITIAL_STREAM_DELAY: 500
+    };
     
-        // DOM element cache
-        const DOM = {
-            elements: {},
-            
-            // Initialize and cache DOM elements
-            init() {
-                this.elements = {
-                    // System info elements
-                    cpuUsage: document.getElementById('cpu-usage'),
-                    cpuProgress: document.getElementById('cpu-progress'),
-                    cpuDetail: document.querySelector('.stat-card:first-child .stat-detail small'),
-                    memoryUsage: document.getElementById('memory-usage'),
-                    memoryProgress: document.getElementById('memory-progress'),
-                    memoryDetail: document.querySelector('.stat-card:nth-child(2) .stat-detail small'),
-                    diskUsage: document.getElementById('disk-usage'),
-                    diskProgress: document.getElementById('disk-progress'),
-                    diskDetail: document.querySelector('.stat-card:nth-child(3) .stat-detail small'),
-                    
-                    // Console elements
-                    consoleOutput: document.getElementById('console-output'),
-                    consoleStatus: document.getElementById('console-status'),
-                    logLevelFilter: document.getElementById('log-level-filter'),
-                    consoleSearch: document.getElementById('console-search'),
-                    searchBtn: document.getElementById('search-btn'),
-                    autoscrollToggle: document.getElementById('autoscroll-toggle'),
-                    clearBtn: document.getElementById('clear-btn'),
-                    exportBtn: document.getElementById('export-btn'),
-                    updateTimeText: document.getElementById('update-time-text')
-                };
-                
-                return this.elements;
-            },
-            
-            // Get a cached element or query it if not cached
-            get(id) {
-                return this.elements[id] || document.getElementById(id);
-            }
-        };
+    // State variables
+    let consoleEventSource = null;
+    let autoScroll = true;
+    let allMessages = [];
+    let currentFilter = 'all';
+    let searchTerm = '';
+    let streamInitialized = false;
+    let restartDetected = false;
+    let availabilityCheckInterval = null;
+    let reconnectAttempts = 0;
+    let consoleStatusElement = null;
+    let consoleOutputElement = null;
+
+    // DOM element cache
+    const elements = {
+        // System info elements
+        cpuUsage: document.getElementById('cpu-usage'),
+        cpuProgress: document.getElementById('cpu-progress'),
+        cpuDetail: document.querySelector('.stat-card:first-child .stat-detail small'),
+        memoryUsage: document.getElementById('memory-usage'),
+        memoryProgress: document.getElementById('memory-progress'),
+        memoryDetail: document.querySelector('.stat-card:nth-child(2) .stat-detail small'),
+        diskUsage: document.getElementById('disk-usage'),
+        diskProgress: document.getElementById('disk-progress'),
+        diskDetail: document.querySelector('.stat-card:nth-child(3) .stat-detail small'),
         
-        // Initialize the application
-        function init() {
-            // Cache DOM elements
-            DOM.init();
-            
-            // Set up event listeners
-            setupEventListeners();
-            // Initialize system info
-            SystemInfo.init();
-            
-            // Initialize console stream with a slight delay
-            setTimeout(() => {
-                // Connect to the console stream
-                connectToConsoleStream();
-                streamInitialized = true;
+        // Console elements
+        consoleOutput: document.getElementById('console-output'),
+        consoleStatus: document.getElementById('console-status'),
+        logLevelFilter: document.getElementById('log-level-filter'),
+        consoleSearch: document.getElementById('console-search'),
+        searchBtn: document.getElementById('search-btn'),
+        autoscrollToggle: document.getElementById('autoscroll-toggle'),
+        clearBtn: document.getElementById('clear-btn'),
+        exportBtn: document.getElementById('export-btn'),
+        updateTimeText: document.getElementById('update-time-text')
+    };
+    
+    // Cache console elements for easier access
+    consoleOutputElement = elements.consoleOutput;
+    consoleStatusElement = elements.consoleStatus;
+    
+    // Initialize the application
+    function init() {
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Initialize system info
+        refreshSystemInfo();
+        setInterval(refreshSystemInfo, CONFIG.SYSTEM_INFO_REFRESH_INTERVAL);
+        
+        // Initialize last updated time
+        updateLastUpdated();
+        setInterval(updateLastUpdated, CONFIG.LAST_UPDATED_REFRESH_INTERVAL);
+        
+        // Initialize console stream with a slight delay
+        setTimeout(() => {
+            // Connect to the console stream
+            connectToConsoleStream();
+            streamInitialized = true;
+            scrollToBottom();
+        }, CONFIG.INITIAL_STREAM_DELAY);
+    }
+    
+    // Set up event listeners for controls
+    function setupEventListeners() {
+        // Log level filter
+        elements.logLevelFilter.addEventListener('change', () => {
+            currentFilter = elements.logLevelFilter.value;
+            refreshConsoleDisplay();
+        });
+        
+        // Search input
+        elements.consoleSearch.addEventListener('input', () => {
+            searchTerm = elements.consoleSearch.value.trim();
+            refreshConsoleDisplay();
+        });
+        
+        // Search button
+        elements.searchBtn.addEventListener('click', () => {
+            searchTerm = elements.consoleSearch.value.trim();
+            refreshConsoleDisplay();
+        });
+        
+        // Search on enter key
+        elements.consoleSearch.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                searchTerm = elements.consoleSearch.value.trim();
+                refreshConsoleDisplay();
+            }
+        });
+        
+        // Auto-scroll toggle
+        elements.autoscrollToggle.addEventListener('change', (e) => {
+            autoScroll = e.target.checked;
+            if (autoScroll) {
                 scrollToBottom();
-            }, CONFIG.INITIAL_STREAM_DELAY);
-            }, CONFIG.INITIAL_STREAM_DELAY);
-        }
-        
-        // Set up event listeners for controls
-        function setupEventListeners() {
-            const elements = DOM.elements;
-            
-            // Log level filter
-            elements.logLevelFilter.addEventListener('change', () => {
-                currentFilter = elements.logLevelFilter.value;
-                refreshConsoleDisplay();
-            });
-            
-            // Search input
-            elements.consoleSearch.addEventListener('input', () => {
-                searchTerm = elements.consoleSearch.value.trim();
-                refreshConsoleDisplay();
-            });
-            
-            // Search button
-            elements.searchBtn.addEventListener('click', () => {
-                searchTerm = elements.consoleSearch.value.trim();
-                refreshConsoleDisplay();
-            });
-            
-            // Search on enter key
-            elements.consoleSearch.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    searchTerm = elements.consoleSearch.value.trim();
-                    refreshConsoleDisplay();
-                }
-            });
-            
-            // Auto-scroll toggle
-            elements.autoscrollToggle.addEventListener('change', (e) => {
-                autoScroll = e.target.checked;
-                if (autoScroll) {
-                    scrollToBottom();
-                }
-            });
-            
-            // Clear console button
-            elements.clearBtn.addEventListener('click', clearConsole);
-            
-            // Export logs button
-            elements.exportBtn.addEventListener('click', exportLogs);
-            
-            // Console scrolling
-            setupScrollHandling();
-        }
-        
-        function setupScrollHandling() {
-            const consoleOutput = DOM.elements.consoleOutput;
-            if (!consoleOutput) return;
-            
-            // Variables to track user scrolling vs. content additions
-            let lastScrollHeight = 0;
-            let userScrolledUp = false;
-            let scrollTimeout = null;
-            
-            // Initialize the last scroll height
-            setTimeout(() => {
-                lastScrollHeight = consoleOutput.scrollHeight;
-            }, 500);
-            
-            consoleOutput.addEventListener('scroll', function() {
-                // Clear any pending scroll timeout
-                if (scrollTimeout) {
-                    clearTimeout(scrollTimeout);
-                }
-                
-                // Calculate how far from the bottom we are
-                const scrollBottom = consoleOutput.scrollHeight - consoleOutput.scrollTop - consoleOutput.clientHeight;
-                
-                // If the scroll height hasn't changed, this is a user-initiated scroll
-                if (consoleOutput.scrollHeight === lastScrollHeight) {
-                    // User scrolled up if we're more than 50px from bottom
-                    userScrolledUp = scrollBottom > 50;
-                    
-                    // If user scrolled up, disable auto-scroll
-                    if (userScrolledUp && autoScroll) {
-                        DOM.elements.autoscrollToggle.checked = false;
-                        autoScroll = false;
-                    }
-                    
-                    // If user scrolled to bottom, re-enable auto-scroll if toggle is checked
-                    if (scrollBottom < 10 && !autoScroll && DOM.elements.autoscrollToggle.checked) {
-                        autoScroll = true;
-                    }
-                } else {
-                    // Content was added, update the last scroll height
-                    lastScrollHeight = consoleOutput.scrollHeight;
-                    
-                    // If auto-scroll is enabled, scroll to bottom after a short delay
-                    if (autoScroll) {
-                        scrollTimeout = setTimeout(scrollToBottom, 50);
-                    }
-                }
-            });
-        }
-        
-        // System information module
-        const SystemInfo = {
-            refreshInProgress: false,
-            
-            // Initialize system info display
-            init() {
-                this.refresh();
-                setInterval(() => this.refresh(), CONFIG.SYSTEM_INFO_REFRESH_INTERVAL);
-                
-                // Initialize last updated time
-                this.updateLastUpdated();
-                setInterval(() => this.updateLastUpdated(), CONFIG.LAST_UPDATED_REFRESH_INTERVAL);
-                
-                // Initialize progress bars
-                this.updateProgressBars();
-            },
-            
-            // Refresh system information from API
-            refresh() {
-                if (this.refreshInProgress) return;
-                
-                this.refreshInProgress = true;
-                
-                // Fetch data from separate endpoints for better performance
-                Promise.all([
-                    fetch('/api/system-info/cpu').then(response => response.json()),
-                    fetch('/api/system-info/memory').then(response => response.json()),
-                    fetch('/api/system-info/disk').then(response => response.json())
-                ])
-                .then(([cpuData, memoryData, diskData]) => {
-                    const data = { cpu: cpuData, memory: memoryData, disk: diskData };
-                    this.updateCards(data);
-                    this.updateProgressBars();
-                    this.updateLastUpdated();
-                    this.refreshInProgress = false;
-                })
-                .catch(error => {
-                    console.error('Error fetching system info:', error);
-                    this.refreshInProgress = false;
-                    setTimeout(() => this.refresh(), 5000);
-                });
-            },
-            
-            // Update the "last updated" time display
-            updateLastUpdated() {
-                const updateTimeElement = DOM.get('updateTimeText');
-                if (!updateTimeElement) return;
-                
-                const now = new Date();
-                const lastUpdate = window.lastUpdateTime || now;
-                window.lastUpdateTime = now;
-                
-                const diffInSeconds = Math.floor((now - lastUpdate) / 1000);
-                
-                let text = 'Just now';
-                let className = 'update-time-normal';
-                
-                if (diffInSeconds < 60) {
-                    text = 'Just now';
-                } else if (diffInSeconds < 300) {
-                    text = 'Less than 5 minutes ago';
-                } else {
-                    text = 'Over 5 minutes ago';
-                    className = 'update-time-warning';
-                }
-                
-                updateTimeElement.textContent = text;
-                updateTimeElement.className = 'update-time-text ' + className;
-            },
-            
-            // Update system info cards with new data
-            updateCards(data) {
-                const elements = DOM.elements;
-                
-                // Update CPU info
-                if (data.cpu) {
-                    const cpuValue = data.cpu.normalized_load_avg ?
-                        data.cpu.normalized_load_avg[0] : data.cpu.percent;
-                    const cpuRounded = Math.round(cpuValue);
-                    
-                    if (elements.cpuUsage) elements.cpuUsage.textContent = cpuRounded + '%';
-                    if (elements.cpuProgress) elements.cpuProgress.style.width = cpuRounded + '%';
-                    
-                    if (elements.cpuDetail && data.cpu.count && data.cpu.model) {
-                        elements.cpuDetail.textContent = `${data.cpu.count} cores | ${data.cpu.model}`;
-                    }
-                }
-                
-                // Update Memory info
-                if (data.memory) {
-                    const memRounded = Math.round(data.memory.percent);
-                    
-                    if (elements.memoryUsage) elements.memoryUsage.textContent = memRounded + '%';
-                    if (elements.memoryProgress) elements.memoryProgress.style.width = memRounded + '%';
-                    
-                    if (elements.memoryDetail && data.memory.used && data.memory.total) {
-                        const usedGB = (data.memory.used / 1024 / 1024 / 1024).toFixed(1);
-                        const totalGB = (data.memory.total / 1024 / 1024 / 1024).toFixed(1);
-                        elements.memoryDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
-                    }
-                }
-                
-                // Update Disk info
-                if (data.disk) {
-                    const diskRounded = Math.round(data.disk.percent);
-                    
-                    if (elements.diskUsage) elements.diskUsage.textContent = diskRounded + '%';
-                    if (elements.diskProgress) elements.diskProgress.style.width = diskRounded + '%';
-                    
-                    if (elements.diskDetail && data.disk.used && data.disk.total) {
-                        const usedGB = (data.disk.used / 1024 / 1024 / 1024).toFixed(1);
-                        const totalGB = (data.disk.total / 1024 / 1024 / 1024).toFixed(1);
-                        elements.diskDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
-                    }
-                }
-            },
-            
-            // Update progress bar colors based on values
-            updateProgressBars() {
-                const elements = DOM.elements;
-                
-                const updateBarColor = (bar, value) => {
-                    if (!bar) return;
-                    
-                    if (value < 50) {
-                        bar.style.backgroundColor = 'var(--green)';
-                    } else if (value < 80) {
-                        bar.style.backgroundColor = 'var(--yellow)';
-                    } else {
-                        bar.style.backgroundColor = 'var(--red)';
-                    }
-                };
-                
-                // Get current values
-                const cpuValue = parseInt(elements.cpuProgress?.style.width) || 0;
-                const memoryValue = parseInt(elements.memoryProgress?.style.width) || 0;
-                const diskValue = parseInt(elements.diskProgress?.style.width) || 0;
-                
-                // Update colors
-                updateBarColor(elements.cpuProgress, cpuValue);
-                updateBarColor(elements.memoryProgress, memoryValue);
-                updateBarColor(elements.diskProgress, diskValue);
             }
-        };
+        });
+        
+        // Clear console button
+        elements.clearBtn.addEventListener('click', clearConsole);
+        
+        // Export logs button
+        elements.exportBtn.addEventListener('click', exportLogs);
+        
+        // Console scrolling
+        setupScrollHandling();
+    }
     
-    // Function to update the "last updated" time
+    function setupScrollHandling() {
+        if (!consoleOutputElement) return;
+        
+        // Variables to track user scrolling vs. content additions
+        let lastScrollHeight = 0;
+        let userScrolledUp = false;
+        let scrollTimeout = null;
+        
+        // Initialize the last scroll height
+        setTimeout(() => {
+            lastScrollHeight = consoleOutputElement.scrollHeight;
+        }, 500);
+        
+        consoleOutputElement.addEventListener('scroll', function() {
+            // Clear any pending scroll timeout
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            
+            // Calculate how far from the bottom we are
+            const scrollBottom = consoleOutputElement.scrollHeight - consoleOutputElement.scrollTop - consoleOutputElement.clientHeight;
+            
+            // If the scroll height hasn't changed, this is a user-initiated scroll
+            if (consoleOutputElement.scrollHeight === lastScrollHeight) {
+                // User scrolled up if we're more than 50px from bottom
+                userScrolledUp = scrollBottom > 50;
+                
+                // If user scrolled up, disable auto-scroll
+                if (userScrolledUp && autoScroll) {
+                    elements.autoscrollToggle.checked = false;
+                    autoScroll = false;
+                }
+                
+                // If user scrolled to bottom, re-enable auto-scroll if toggle is checked
+                if (scrollBottom < 10 && !autoScroll && elements.autoscrollToggle.checked) {
+                    autoScroll = true;
+                }
+            } else {
+                // Content was added, update the last scroll height
+                lastScrollHeight = consoleOutputElement.scrollHeight;
+                
+                // If auto-scroll is enabled, scroll to bottom after a short delay
+                if (autoScroll) {
+                    scrollTimeout = setTimeout(scrollToBottom, 50);
+                }
+            }
+        });
+    }
+    
+    // Refresh system information from API
+    let refreshInProgress = false;
+    function refreshSystemInfo() {
+        if (refreshInProgress) return;
+        
+        refreshInProgress = true;
+        
+        // Fetch data from separate endpoints for better performance
+        Promise.all([
+            fetch('/api/system-info/cpu').then(response => response.json()),
+            fetch('/api/system-info/memory').then(response => response.json()),
+            fetch('/api/system-info/disk').then(response => response.json())
+        ])
+        .then(([cpuData, memoryData, diskData]) => {
+            const data = { cpu: cpuData, memory: memoryData, disk: diskData };
+            updateSystemInfoCards(data);
+            updateProgressBars();
+            updateLastUpdated();
+            refreshInProgress = false;
+        })
+        .catch(error => {
+            console.error('Error fetching system info:', error);
+            refreshInProgress = false;
+            setTimeout(refreshSystemInfo, 5000);
+        });
+    }
+    
+    // Update the "last updated" time display
     function updateLastUpdated() {
-        const updateTimeElement = document.getElementById('update-time-text');
+        const updateTimeElement = elements.updateTimeText;
+        if (!updateTimeElement) return;
+        
         const now = new Date();
         const lastUpdate = window.lastUpdateTime || now;
         window.lastUpdateTime = now;
@@ -635,200 +510,105 @@
         updateTimeElement.className = 'update-time-text ' + className;
     }
     
-    // Cache DOM elements for better performance
-    let domElements = {};
-    
-    // Function to cache DOM elements on page load
-    function cacheDOMElements() {
-        domElements = {
-            cpuUsage: document.getElementById('cpu-usage'),
-            cpuProgress: document.getElementById('cpu-progress'),
-            cpuDetail: document.querySelector('.stat-card:first-child .stat-detail small'),
-            memoryUsage: document.getElementById('memory-usage'),
-            memoryProgress: document.getElementById('memory-progress'),
-            memoryDetail: document.querySelector('.stat-card:nth-child(2) .stat-detail small'),
-            diskUsage: document.getElementById('disk-usage'),
-            diskProgress: document.getElementById('disk-progress'),
-            diskDetail: document.querySelector('.stat-card:nth-child(3) .stat-detail small'),
-            uptimeValue: document.getElementById('uptime-value')
-        };
-    }
-    
-    // Function to refresh system information with debouncing and parallel requests
-    let refreshInProgress = false;
-    function refreshSystemInfo() {
-        // Prevent multiple simultaneous requests
-        if (refreshInProgress) return;
-        
-        refreshInProgress = true;
-        
-        // Use separate API endpoints for each metric to reduce load
-        // This allows partial updates if one endpoint is slow
-        Promise.all([
-            fetch('/api/system-info/cpu').then(response => response.json()),
-            fetch('/api/system-info/memory').then(response => response.json()),
-            fetch('/api/system-info/disk').then(response => response.json())
-        ])
-        .then(([cpuData, memoryData, diskData]) => {
-            // Combine the data
-            const data = {
-                cpu: cpuData,
-                memory: memoryData,
-                disk: diskData
-            };
-            
-            updateSystemInfoCards(data);
-            updateProgressBars();
-            updateLastUpdated();
-            refreshInProgress = false;
-        })
-        .catch(error => {
-            console.error('Error fetching system info:', error);
-            refreshInProgress = false;
-            
-            // Schedule a retry after a delay
-            setTimeout(refreshSystemInfo, 5000);
-        });
-    }
-    
-    // Function to update system information cards
+    // Update system info cards with new data
     function updateSystemInfoCards(data) {
-        // Ensure DOM elements are cached
-        if (!domElements.cpuUsage) {
-            cacheDOMElements();
-        }
-        
-        // Update CPU card with 1-minute load average (rounded to integer)
+        // Update CPU info
         if (data.cpu) {
-            const cpuValue = data.cpu.normalized_load_avg ? data.cpu.normalized_load_avg[0] : data.cpu.percent;
+            const cpuValue = data.cpu.normalized_load_avg ?
+                data.cpu.normalized_load_avg[0] : data.cpu.percent;
             const cpuRounded = Math.round(cpuValue);
             
-            if (domElements.cpuUsage) domElements.cpuUsage.textContent = cpuRounded + '%';
-            if (domElements.cpuProgress) domElements.cpuProgress.style.width = cpuRounded + '%';
+            if (elements.cpuUsage) elements.cpuUsage.textContent = cpuRounded + '%';
+            if (elements.cpuProgress) elements.cpuProgress.style.width = cpuRounded + '%';
             
-            // Update CPU details
-            if (domElements.cpuDetail && data.cpu.count && data.cpu.model) {
-                domElements.cpuDetail.textContent = `${data.cpu.count} cores | ${data.cpu.model}`;
+            if (elements.cpuDetail && data.cpu.count && data.cpu.model) {
+                elements.cpuDetail.textContent = `${data.cpu.count} cores | ${data.cpu.model}`;
             }
         }
         
-        // Update Memory card (rounded to integer)
+        // Update Memory info
         if (data.memory) {
             const memRounded = Math.round(data.memory.percent);
             
-            if (domElements.memoryUsage) domElements.memoryUsage.textContent = memRounded + '%';
-            if (domElements.memoryProgress) domElements.memoryProgress.style.width = memRounded + '%';
+            if (elements.memoryUsage) elements.memoryUsage.textContent = memRounded + '%';
+            if (elements.memoryProgress) elements.memoryProgress.style.width = memRounded + '%';
             
-            // Update memory details
-            if (domElements.memoryDetail && data.memory.used && data.memory.total) {
+            if (elements.memoryDetail && data.memory.used && data.memory.total) {
                 const usedGB = (data.memory.used / 1024 / 1024 / 1024).toFixed(1);
                 const totalGB = (data.memory.total / 1024 / 1024 / 1024).toFixed(1);
-                domElements.memoryDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
+                elements.memoryDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
             }
         }
         
-        // Update Disk card (rounded to integer)
+        // Update Disk info
         if (data.disk) {
             const diskRounded = Math.round(data.disk.percent);
             
-            if (domElements.diskUsage) domElements.diskUsage.textContent = diskRounded + '%';
-            if (domElements.diskProgress) domElements.diskProgress.style.width = diskRounded + '%';
+            if (elements.diskUsage) elements.diskUsage.textContent = diskRounded + '%';
+            if (elements.diskProgress) elements.diskProgress.style.width = diskRounded + '%';
             
-            // Update disk details
-            if (domElements.diskDetail && data.disk.used && data.disk.total) {
+            if (elements.diskDetail && data.disk.used && data.disk.total) {
                 const usedGB = (data.disk.used / 1024 / 1024 / 1024).toFixed(1);
                 const totalGB = (data.disk.total / 1024 / 1024 / 1024).toFixed(1);
-                domElements.diskDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
+                elements.diskDetail.textContent = `${usedGB} GB / ${totalGB} GB`;
             }
-        }
-        
-        // Update uptime if available
-        if (data.uptime && data.uptime.uptime_formatted && domElements.uptimeValue) {
-            domElements.uptimeValue.textContent = data.uptime.uptime_formatted;
         }
     }
     
-    // Function to update progress bar colors based on values
+    // Update progress bar colors based on values
     function updateProgressBars() {
-        const cpuProgress = document.getElementById('cpu-progress');
-        const memoryProgress = document.getElementById('memory-progress');
-        const diskProgress = document.getElementById('disk-progress');
+        const updateBarColor = (bar, value) => {
+            if (!bar) return;
+            
+            if (value < 50) {
+                bar.style.backgroundColor = 'var(--green)';
+            } else if (value < 80) {
+                bar.style.backgroundColor = 'var(--yellow)';
+            } else {
+                bar.style.backgroundColor = 'var(--red)';
+            }
+        };
         
         // Get current values
-        const cpuValue = parseInt(cpuProgress.style.width) || 0;
-        const memoryValue = parseInt(memoryProgress.style.width) || 0;
-        const diskValue = parseInt(diskProgress.style.width) || 0;
+        const cpuValue = parseInt(elements.cpuProgress?.style.width) || 0;
+        const memoryValue = parseInt(elements.memoryProgress?.style.width) || 0;
+        const diskValue = parseInt(elements.diskProgress?.style.width) || 0;
         
-        // Set colors based on values
-        if (cpuValue < 50) {
-            cpuProgress.style.backgroundColor = 'var(--green)';
-        } else if (cpuValue < 80) {
-            cpuProgress.style.backgroundColor = 'var(--yellow)';
-        } else {
-            cpuProgress.style.backgroundColor = 'var(--red)';
-        }
-        
-        if (memoryValue < 50) {
-            memoryProgress.style.backgroundColor = 'var(--green)';
-        } else if (memoryValue < 80) {
-            memoryProgress.style.backgroundColor = 'var(--yellow)';
-        } else {
-            memoryProgress.style.backgroundColor = 'var(--red)';
-        }
-        
-        if (diskValue < 50) {
-            diskProgress.style.backgroundColor = 'var(--green)';
-        } else if (diskValue < 80) {
-            diskProgress.style.backgroundColor = 'var(--yellow)';
-        } else {
-            diskProgress.style.backgroundColor = 'var(--red)';
-        }
+        // Update colors
+        updateBarColor(elements.cpuProgress, cpuValue);
+        updateBarColor(elements.memoryProgress, memoryValue);
+        updateBarColor(elements.diskProgress, diskValue);
     }
     
-    // Cache DOM elements for console status
-    let consoleStatusElement = null;
-    
-    // Console Stream module
-    const ConsoleStream = {
-        // Initialize the console stream
-        init() {
-            this.connectToConsoleStream();
-        },
+    // Connect to the console stream
+    function connectToConsoleStream() {
+        // Close any existing connection
+        if (consoleEventSource) {
+            consoleEventSource.close();
+            consoleEventSource = null;
+        }
         
-        // Connect to the console stream
-        connectToConsoleStream() {
-            // Cache console status element
-            if (!consoleStatusElement) {
-                consoleStatusElement = document.getElementById('console-status');
-            }
+        // Update status to connecting
+        if (consoleStatusElement) {
+            consoleStatusElement.textContent = 'Connecting...';
+            consoleStatusElement.className = 'badge badge-warning';
+        }
+        
+        // Connect to the SSE endpoint
+        try {
+            consoleEventSource = new EventSource('/console-stream');
             
-            // Close any existing connection
-            if (consoleEventSource) {
-                consoleEventSource.close();
-                consoleEventSource = null;
-            }
-            
-            // Update status to connecting
-            if (consoleStatusElement) {
-                consoleStatusElement.textContent = 'Connecting...';
-                consoleStatusElement.className = 'badge badge-warning';
-            }
-            
-            // Connect to the SSE endpoint
-            try {
-                consoleEventSource = new EventSource('/console-stream');
+            // Handle connection open
+            consoleEventSource.onopen = function() {
+                // Reset reconnect attempts on successful connection
+                reconnectAttempts = 0;
                 
-                // Handle connection open
-                consoleEventSource.onopen = function() {
-                    // Reset reconnect attempts on successful connection
-                    reconnectAttempts = 0;
-                    
-                    if (consoleStatusElement) {
-                        consoleStatusElement.textContent = 'Connected';
-                        consoleStatusElement.className = 'badge badge-success';
-                    }
-                    appendToConsole("Connected to console stream", "info");
-                };
+                if (consoleStatusElement) {
+                    consoleStatusElement.textContent = 'Connected';
+                    consoleStatusElement.className = 'badge badge-success';
+                }
+                appendToConsole("Connected to console stream", "info");
+            };
             
             // Handle messages with batching for better performance
             let messageQueue = [];
@@ -871,9 +651,8 @@
                         restartNotification.innerHTML = '<strong>System Restart in Progress</strong><br>The application is restarting. Please wait while the system comes back online. This process can take up to a minute.';
                         
                         // Add to the top of the console output
-                        const consoleOutput = document.getElementById('console-output');
-                        if (consoleOutput && !document.getElementById('restart-notification')) {
-                            consoleOutput.insertBefore(restartNotification, consoleOutput.firstChild);
+                        if (consoleOutputElement && !document.getElementById('restart-notification')) {
+                            consoleOutputElement.insertBefore(restartNotification, consoleOutputElement.firstChild);
                         }
                         
                         // Start checking for application availability
@@ -900,7 +679,7 @@
                 processingQueue = true;
                 
                 requestAnimationFrame(function() {
-                    // Process up to 20 messages at a time (increased from 10)
+                    // Process up to 20 messages at a time
                     const messagesToProcess = messageQueue.splice(0, 20);
                     
                     if (messagesToProcess.length > 0) {
@@ -920,6 +699,51 @@
                     }
                 });
             }
+            
+            // Handle errors with improved error handling
+            consoleEventSource.addEventListener('error', function(event) {
+                if (event.data) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        appendToConsole(data.message, "error");
+                    } catch (e) {
+                        // Silently ignore parsing errors
+                    }
+                }
+            });
+            
+            // Handle connection errors with cached DOM element and exponential backoff
+            consoleEventSource.onerror = function(event) {
+                // Check if the connection was never established
+                if (consoleEventSource.readyState === 0) {
+                    appendToConsole('Failed to connect to console stream. Will retry automatically.', "error");
+                    if (consoleStatusElement) {
+                        consoleStatusElement.textContent = 'Connection Failed';
+                        consoleStatusElement.className = 'badge badge-danger';
+                    }
+                    scheduleReconnect();
+                }
+                // Check if the connection was lost after being established
+                else if (consoleEventSource.readyState === 2) {
+                    // If we detect a message about restarting, mark as restart detected
+                    if (!restartDetected) {
+                        appendToConsole('Connection to console stream lost. This may be due to application restart.', "warning");
+                        appendToConsole('Waiting for application to become available again...', "info");
+                        restartDetected = true;
+                        
+                        // Start checking for application availability
+                        startAvailabilityCheck();
+                    } else {
+                        appendToConsole('Connection to console stream lost. Attempting to reconnect...', "warning");
+                    }
+                    
+                    if (consoleStatusElement) {
+                        consoleStatusElement.textContent = 'Disconnected';
+                        consoleStatusElement.className = 'badge badge-warning';
+                    }
+                    scheduleReconnect();
+                }
+            };
         } catch (e) {
             appendToConsole("Failed to connect to console stream: " + e.message, "error");
             if (consoleStatusElement) {
@@ -928,51 +752,6 @@
             }
             scheduleReconnect();
         }
-        
-        // Handle errors with improved error handling
-        consoleEventSource.addEventListener('error', function(event) {
-            if (event.data) {
-                try {
-                    const data = JSON.parse(event.data);
-                    appendToConsole(data.message, "error");
-                } catch (e) {
-                    // Silently ignore parsing errors
-                }
-            }
-        });
-        
-        // Handle connection errors with cached DOM element and exponential backoff
-        consoleEventSource.onerror = function(event) {
-            // Check if the connection was never established
-            if (consoleEventSource.readyState === 0) {
-                appendToConsole('Failed to connect to console stream. Will retry automatically.', "error");
-                if (consoleStatusElement) {
-                    consoleStatusElement.textContent = 'Connection Failed';
-                    consoleStatusElement.className = 'badge badge-danger';
-                }
-                scheduleReconnect();
-            }
-            // Check if the connection was lost after being established
-            else if (consoleEventSource.readyState === 2) {
-                // If we detect a message about restarting, mark as restart detected
-                if (!restartDetected) {
-                    appendToConsole('Connection to console stream lost. This may be due to application restart.', "warning");
-                    appendToConsole('Waiting for application to become available again...', "info");
-                    restartDetected = true;
-                    
-                    // Start checking for application availability
-                    startAvailabilityCheck();
-                } else {
-                    appendToConsole('Connection to console stream lost. Attempting to reconnect...', "warning");
-                }
-                
-                if (consoleStatusElement) {
-                    consoleStatusElement.textContent = 'Disconnected';
-                    consoleStatusElement.className = 'badge badge-warning';
-                }
-                scheduleReconnect();
-            }
-        };
     }
     
     // Function to schedule reconnection with exponential backoff
@@ -983,7 +762,7 @@
         if (restartDetected) {
             const delay = 10000; // Fixed 10 second delay during restart
             
-            if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+            if (reconnectAttempts <= CONFIG.MAX_RECONNECT_ATTEMPTS) {
                 appendToConsole(`Checking if application is available... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, "info");
                 setTimeout(connectToConsoleStream, delay);
             } else {
@@ -992,7 +771,7 @@
             }
         } else {
             // Normal exponential backoff for non-restart connection issues
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), CONFIG.MAX_RECONNECT_DELAY);
             appendToConsole(`Reconnecting in ${delay/1000} seconds (attempt ${reconnectAttempts})...`, "info");
             setTimeout(connectToConsoleStream, delay);
         }
@@ -1051,8 +830,7 @@
         });
     }
     
-    // Cache DOM elements for console output
-    let consoleOutputElement = null;
+    // Cache icons for message types (already have consoleOutputElement defined above)
     
     // Cache icons for message types
     const messageIcons = {
@@ -1061,8 +839,7 @@
         'info': '<i class="fas fa-info-circle"></i> '
     };
     
-    // Limit the number of messages to prevent memory issues
-    const MAX_MESSAGES = 500; // Reduced from 1000 to 500 to improve performance
+    // Use CONFIG.MAX_MESSAGES for consistency
     
     function appendToConsole(message, type) {
         // Get console output element if not cached
@@ -1085,8 +862,8 @@
         allMessages.unshift(messageObj);
         
         // Trim messages array if it gets too large
-        if (allMessages.length > MAX_MESSAGES) {
-            allMessages.length = MAX_MESSAGES; // More efficient than slice
+        if (allMessages.length > CONFIG.MAX_MESSAGES) {
+            allMessages.length = CONFIG.MAX_MESSAGES; // More efficient than slice
         }
         
         // Check if this message should be displayed based on current filter
@@ -1131,9 +908,9 @@
         consoleOutputElement.appendChild(messageElement);
         
         // Limit the number of DOM elements to prevent browser slowdown
-        if (consoleOutputElement.children.length > MAX_MESSAGES) {
+        if (consoleOutputElement.children.length > CONFIG.MAX_MESSAGES) {
             // Remove oldest messages
-            while (consoleOutputElement.children.length > MAX_MESSAGES) {
+            while (consoleOutputElement.children.length > CONFIG.MAX_MESSAGES) {
                 consoleOutputElement.removeChild(consoleOutputElement.firstChild);
             }
         }
@@ -1189,7 +966,7 @@
         
         // Since we changed allMessages to add at the beginning (unshift),
         // we can now process in forward order which is more efficient
-        for (let i = 0; i < allMessages.length && displayCount < MAX_MESSAGES; i++) {
+        for (let i = 0; i < allMessages.length && displayCount < CONFIG.MAX_MESSAGES; i++) {
             if (shouldDisplayMessage(allMessages[i])) {
                 // Create message element directly in the fragment
                 const messageObj = allMessages[i];
@@ -1295,140 +1072,12 @@
         }
     });
     
-    // Initialize the application when the DOM is loaded
-    document.addEventListener('DOMContentLoaded', init);
-    
-    // Return public API
-    return {
-        init,
-        SystemInfo,
-        refreshConsoleDisplay,
-        clearConsole,
-        exportLogs
-    };
-})();
+    // Initialize the application
+    init();
+});
 </script>
 {% endblock %}
 
 {% block additional_scripts %}
-<script>
-// Simple script to connect to the console stream
-document.addEventListener('DOMContentLoaded', function() {
-    // Wait a moment for the page to fully load
-    setTimeout(function() {
-        // Get the console output element
-        const consoleOutput = document.getElementById('console-output');
-        const consoleStatus = document.getElementById('console-status');
-        
-        // Update status to connecting
-        if (consoleStatus) {
-            consoleStatus.textContent = 'Connecting...';
-            consoleStatus.className = 'badge badge-warning';
-        }
-        
-        // Clear the "Connecting to console stream..." message
-        if (consoleOutput) {
-            consoleOutput.innerHTML = '';
-        }
-        
-        // Connect to the SSE endpoint
-        try {
-            const eventSource = new EventSource('/console-stream');
-            
-            // Handle connection open
-            eventSource.onopen = function() {
-                if (consoleStatus) {
-                    consoleStatus.textContent = 'Connected';
-                    consoleStatus.className = 'badge badge-success';
-                }
-                
-                // Add a connected message
-                if (consoleOutput) {
-                    const messageElement = document.createElement('div');
-                    messageElement.className = 'console-message info';
-                    messageElement.innerHTML = '<span class="timestamp">' + new Date().toISOString().replace('T', ' ').substr(0, 19) + '</span><i class="fas fa-info-circle"></i> Connected to console stream';
-                    consoleOutput.appendChild(messageElement);
-                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                }
-            };
-            
-            // Handle messages
-            eventSource.addEventListener('message', function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (consoleOutput) {
-                        const messageElement = document.createElement('div');
-                        messageElement.className = 'console-message ' + (data.type || 'info');
-                        
-                        // Add timestamp
-                        const timestampSpan = document.createElement('span');
-                        timestampSpan.className = 'timestamp';
-                        timestampSpan.textContent = data.timestamp || new Date().toISOString().replace('T', ' ').substr(0, 19);
-                        messageElement.appendChild(timestampSpan);
-                        
-                        // Add message with appropriate icon
-                        let icon = '';
-                        if (data.type === 'error') {
-                            icon = '<i class="fas fa-exclamation-triangle"></i> ';
-                        } else if (data.type === 'warning') {
-                            icon = '<i class="fas fa-exclamation-circle"></i> ';
-                        } else {
-                            icon = '<i class="fas fa-info-circle"></i> ';
-                        }
-                        
-                        const messageContent = document.createElement('span');
-                        messageContent.className = 'message-content';
-                        messageContent.innerHTML = icon + data.message;
-                        messageElement.appendChild(messageContent);
-                        
-                        // Add to console output
-                        consoleOutput.appendChild(messageElement);
-                        
-                        // Auto-scroll to bottom
-                        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                    }
-                } catch (e) {
-                    console.error('Error parsing message:', e);
-                }
-            });
-            
-            // Handle errors
-            eventSource.onerror = function() {
-                if (consoleStatus) {
-                    consoleStatus.textContent = 'Disconnected';
-                    consoleStatus.className = 'badge badge-danger';
-                }
-                
-                // Add an error message
-                if (consoleOutput) {
-                    const messageElement = document.createElement('div');
-                    messageElement.className = 'console-message error';
-                    messageElement.innerHTML = '<span class="timestamp">' + new Date().toISOString().replace('T', ' ').substr(0, 19) + '</span><i class="fas fa-exclamation-triangle"></i> Connection to console stream lost. Refresh the page to reconnect.';
-                    consoleOutput.appendChild(messageElement);
-                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                }
-                
-                // Close the connection
-                eventSource.close();
-            };
-            
-            // Clean up when leaving the page
-            window.addEventListener('beforeunload', function() {
-                eventSource.close();
-            });
-        } catch (e) {
-            console.error('Error connecting to console stream:', e);
-            
-            // Add an error message
-            if (consoleOutput) {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'console-message error';
-                messageElement.innerHTML = '<span class="timestamp">' + new Date().toISOString().replace('T', ' ').substr(0, 19) + '</span><i class="fas fa-exclamation-triangle"></i> Failed to connect to console stream: ' + e.message;
-                consoleOutput.appendChild(messageElement);
-            }
-        }
-    }, 500); // Wait 500ms for the page to fully load
-});
-</script>
+<!-- No additional scripts needed - main script handles everything -->
 {% endblock %}
