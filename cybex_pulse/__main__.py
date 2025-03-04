@@ -161,7 +161,17 @@ def main():
                 mode = termios.tcgetattr(fd)
                 mode[3] = mode[3] | termios.ECHO | termios.ICANON
                 termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
-                os.system('stty sane')  # Additional terminal reset
+                
+                # More thorough terminal reset
+                os.system('stty sane')  # Reset terminal settings
+                
+                # Print a newline and flush to ensure prompt appears
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                
+                # Force shell to redisplay prompt by sending a harmless command
+                os.system('tput smam')  # Enable automatic margins
+                os.system('tput cnorm')  # Make cursor visible
             except Exception as e:
                 logger.debug(f"Error resetting terminal: {e}")
                 
@@ -181,7 +191,18 @@ def main():
     def reset_terminal():
         try:
             import os
-            os.system('stty sane')
+            import sys
+            
+            # More thorough terminal reset
+            os.system('stty sane')  # Reset terminal settings
+            
+            # Print a newline and flush to ensure prompt appears
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            
+            # Force shell to redisplay prompt
+            os.system('tput smam')  # Enable automatic margins
+            os.system('tput cnorm')  # Make cursor visible
         except Exception:
             pass
     atexit.register(reset_terminal)
@@ -192,8 +213,22 @@ def main():
         # This should not be needed due to the signal handler, but keep it as a fallback
         logger.info("Application terminated by user")
         # Reset terminal directly here as well
-        import os
-        os.system('stty sane')
+        try:
+            import os
+            import sys
+            
+            # More thorough terminal reset
+            os.system('stty sane')  # Reset terminal settings
+            
+            # Print a newline and flush to ensure prompt appears
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            
+            # Force shell to redisplay prompt
+            os.system('tput smam')  # Enable automatic margins
+            os.system('tput cnorm')  # Make cursor visible
+        except Exception as e:
+            logger.debug(f"Error resetting terminal: {e}")
     except Exception as e:
         logger.exception("Unhandled exception: %s", str(e))
         return 1
@@ -202,7 +237,18 @@ def main():
         # One final attempt to reset the terminal
         try:
             import os
-            os.system('stty sane')
+            import sys
+            
+            # More thorough terminal reset
+            os.system('stty sane')  # Reset terminal settings
+            
+            # Print a newline and flush to ensure prompt appears
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            
+            # Force shell to redisplay prompt
+            os.system('tput smam')  # Enable automatic margins
+            os.system('tput cnorm')  # Make cursor visible
         except Exception:
             pass
     
