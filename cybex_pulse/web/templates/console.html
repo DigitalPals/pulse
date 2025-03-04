@@ -624,9 +624,25 @@
                         
                         // Add our own message about waiting for the application
                         messageQueue.push({
-                            message: "Application is restarting. Please wait while the system comes back online...",
-                            type: "info"
+                            message: "APPLICATION IS RESTARTING. Please wait while the system comes back online. This process can take up to a minute...",
+                            type: "warning"
                         });
+                        
+                        // Add a more visible notification at the top of the console
+                        const restartNotification = document.createElement('div');
+                        restartNotification.id = 'restart-notification';
+                        restartNotification.className = 'alert alert-warning text-center';
+                        restartNotification.style.position = 'sticky';
+                        restartNotification.style.top = '0';
+                        restartNotification.style.zIndex = '100';
+                        restartNotification.style.marginBottom = '10px';
+                        restartNotification.innerHTML = '<strong>System Restart in Progress</strong><br>The application is restarting. Please wait while the system comes back online. This process can take up to a minute.';
+                        
+                        // Add to the top of the console output
+                        const consoleOutput = document.getElementById('console-output');
+                        if (consoleOutput && !document.getElementById('restart-notification')) {
+                            consoleOutput.insertBefore(restartNotification, consoleOutput.firstChild);
+                        }
                         
                         // Start checking for application availability
                         startAvailabilityCheck();
@@ -789,6 +805,12 @@
                 
                 // Update system info
                 refreshSystemInfo();
+                
+                // Remove restart notification if it exists
+                const restartNotification = document.getElementById('restart-notification');
+                if (restartNotification) {
+                    restartNotification.remove();
+                }
             }
         })
         .catch(error => {

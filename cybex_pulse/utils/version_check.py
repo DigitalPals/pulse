@@ -352,10 +352,17 @@ class UpdateChecker:
                     # Try using sudo if available (for handling permission issues)
                     if os.path.exists("/usr/bin/sudo") and os.access("/usr/bin/sudo", os.X_OK):
                         self.logger.info("Using sudo to restart application")
-                        subprocess.Popen(["sudo", current_script], close_fds=True)
+                        # Execute as a bash script if it's the pulse script
+                        if current_script.endswith('/pulse'):
+                            subprocess.Popen(["sudo", "bash", current_script], close_fds=True)
+                        else:
+                            subprocess.Popen(["sudo", current_script], close_fds=True)
                     else:
                         # Fall back to direct execution
-                        subprocess.Popen([current_script], close_fds=True)
+                        if current_script.endswith('/pulse'):
+                            subprocess.Popen(["bash", current_script], close_fds=True)
+                        else:
+                            subprocess.Popen([current_script], close_fds=True)
                     
                     # Exit the current process
                     self.logger.info("Exiting current process to complete restart")
