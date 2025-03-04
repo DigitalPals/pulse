@@ -991,70 +991,75 @@ clone_repository() {
     log_success "Repository setup completed at $INSTALL_DIR"
 }
 
-# Create a wrapper script for running the application
-create_wrapper_script() {
-    log_info "Creating wrapper script..."
+# Function to ensure the pulse file is executable and properly configured
+ensure_pulse_executable() {
+    log_info "Ensuring pulse file is executable..."
     
-    # Create wrapper script in /usr/local/bin for system-wide access
-    WRAPPER_PATH="/usr/local/bin/cybex-pulse"
-    
-    # Create the wrapper script with a different name to avoid collision with directory
-    cat > /tmp/cybex-pulse << EOF
-#!/bin/bash
-# Wrapper script for Cybex Pulse
-
-# Use the detected Python interpreter
-PYTHON_CMD="${PYTHON_CMD}"
-
-# Check if the specified Python interpreter exists
-if ! command -v "\$PYTHON_CMD" &> /dev/null; then
-    # Fall back to other Python commands
-    for cmd in python3.11 python3.10 python3.9 python3.8 python3.7 python3 python; do
-        if command -v \$cmd &> /dev/null; then
-            PYTHON_CMD=\$cmd
-            break
-        fi
-    done
-fi
-
-# Always use the correct installation directory path
-export PYTHONPATH="${INSTALL_DIR}:\$PYTHONPATH"
-
-# Fix for externally-managed-environment on newer Python installations
-if [ -z "\${PYTHONPATH_IGNORE_PEP668+x}" ]; then
-    export PYTHONPATH_IGNORE_PEP668=1
-fi
-
-# Change to the installation directory to ensure git operations work correctly
-cd "${INSTALL_DIR}"
-
-# Handle broken pipe errors more gracefully
-exec "\$PYTHON_CMD" -m cybex_pulse "\$@" 2> >(grep -v 'BrokenPipeError' >&2)
-EOF
-
-    # Install the wrapper script
-    $SUDO_CMD mv /tmp/cybex-pulse "$WRAPPER_PATH"
-    $SUDO_CMD chmod +x "$WRAPPER_PATH"
-    
-    # Create a symlink in the installation directory for direct execution
-    $SUDO_CMD ln -sf "$WRAPPER_PATH" "$INSTALL_DIR/cybex-pulse"
-    
-    # Create a compatibility script at /opt/cybex-pulse if it's a different location
-    if [ "$INSTALL_DIR" != "/opt/cybex-pulse" ]; then
-        log_info "Creating compatibility script at /opt/cybex-pulse..."
-        $SUDO_CMD mkdir -p /opt 2>/dev/null || true
-        cat > /tmp/cybex-pulse-compat << EOF
-#!/bin/bash
-# Compatibility wrapper for Cybex Pulse
-# Redirects to the main wrapper script
-
-exec "$WRAPPER_PATH" "\$@"
-EOF
-        $SUDO_CMD mv /tmp/cybex-pulse-compat /opt/cybex-pulse
-        $SUDO_CMD chmod +x /opt/cybex-pulse
+    # Make sure the pulse file exists and is executable
+    if [ -f "$INSTALL_DIR/pulse" ]; then
+        $SUDO_CMD chmod +x "$INSTALL_DIR/pulse"
+        log_success "Pulse launcher script is executable"
+    else
+        log_error "Pulse launcher script not found at $INSTALL_DIR/pulse" "fatal"
     fi
     
-    log_success "Wrapper script created at $WRAPPER_PATH"
+    # Update the INSTALL_DIR in the pulse script
+    log_info "Updating installation directory in pulse script..."
+    
+    # Create a temporary file with the updated content
+    cat > /tmp/pulse.tmp << EOF
+#!/bin/bash
+# Cybex Pulse launcher script
+# This script starts the Cybex Pulse application
+
+# Use the installation directory from the install script
+INSTALL_DIR="${INSTALL_DIR}"
+
+# Create a dynamic wrapper module for direct execution if it doesn't exist
+if [ ! -f "\$INSTALL_DIR/run_app.py" ]; then
+    cat > "\$INSTALL_DIR/run_app.py" << EOT
+#!/usr/bin/env python3
+# Dynamic wrapper to execute the application directly
+import os
+import sys
+
+# Add the root directory to Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Try to import from different approaches
+try:
+    # Try to run directly from the module
+    from cybex_pulse.__main__ import main
+    main()
+except ImportError:
+    try:
+        # Try direct import of individual files
+        import __main__
+        __main__.main()
+    except (ImportError, AttributeError):
+        # Last resort - execute the main script directly
+        try:
+            with open(os.path.join(current_dir, '__main__.py'), 'r') as f:
+                exec(f.read())
+        except Exception as e:
+            print(f"All execution methods failed: {e}")
+            sys.exit(1)
+EOT
+    chmod +x "\$INSTALL_DIR/run_app.py"
+fi
+
+# Change to the Pulse directory, activate the virtual environment, and run the application
+# Use exec to replace the shell process with Python to properly handle signals
+cd \$INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH && exec python "\$INSTALL_DIR/run_app.py" "\$@"
+EOF
+    
+    # Replace the original pulse file with the updated one
+    $SUDO_CMD mv /tmp/pulse.tmp "$INSTALL_DIR/pulse"
+    $SUDO_CMD chmod +x "$INSTALL_DIR/pulse"
+    
+    log_success "Pulse launcher script configured to use $INSTALL_DIR"
 }
 
 # Create a systemd service file
@@ -1077,7 +1082,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cybex-pulse
+ExecStart=${INSTALL_DIR}/pulse
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONPATH=${INSTALL_DIR}"
 Environment="PYTHONPATH_IGNORE_PEP668=1"
@@ -1249,13 +1254,11 @@ verify_installation() {
         log_success "All core Python packages are available"
     fi
     
-    # Check if wrapper script works
-    if [ -f "/usr/local/bin/cybex-pulse" ]; then
-        log_success "Wrapper script created successfully at /usr/local/bin/cybex-pulse"
-    elif [ -f "${INSTALL_DIR}/cybex-pulse" ]; then
-        log_success "Wrapper script created successfully at ${INSTALL_DIR}/cybex-pulse"
+    # Check if pulse launcher script works
+    if [ -f "${INSTALL_DIR}/pulse" ]; then
+        log_success "Pulse launcher script found at ${INSTALL_DIR}/pulse"
     else
-        log_warning "Wrapper script not found at expected location. It might be in a different path."
+        log_warning "Pulse launcher script not found at expected location: ${INSTALL_DIR}/pulse"
     fi
     
     # Check if installation directory has git repository
@@ -1318,7 +1321,7 @@ print_completion() {
     fi
     
     echo -e "\n${GREEN}Usage Instructions:${NC}"
-    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/cybex-pulse"
+    echo -e "  - ${BOLD}Run the application manually:${NC} $INSTALL_DIR/pulse"
     
     if command -v systemctl &>/dev/null && [ -f "/etc/systemd/system/cybex-pulse.service" ]; then
         echo -e "  - ${BOLD}Start as a service:${NC} sudo systemctl start cybex-pulse"
@@ -1336,7 +1339,7 @@ print_completion() {
     echo
     echo -e "${BLUE}Troubleshooting:${NC}"
     echo -e "  - If the application fails to start, check the log file: $LOG_FILE"
-    echo -e "  - Run with verbose option: $INSTALL_DIR/pulse/pulse --verbose"
+    echo -e "  - Run with verbose option: $INSTALL_DIR/pulse --verbose"
     echo -e "  - Check system Python packages if experiencing import errors"
     echo
     echo -e "${BLUE}For issues or more information, visit:${NC} ${BOLD}https://github.com/DigitalPals/pulse${NC}"
@@ -1516,8 +1519,8 @@ main() {
     # Step 5: Clone repository to correct location
     clone_repository
     
-    # Step 6: Create wrapper script
-    create_wrapper_script
+    # Step 6: Ensure pulse file is executable and properly configured
+    ensure_pulse_executable
     
     # Step 7: Create systemd service (unless --no-service is specified)
     if [ "$NO_SERVICE" = "false" ]; then
