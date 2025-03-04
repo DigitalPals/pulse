@@ -462,13 +462,22 @@ class CybexPulseApp:
                             if speedtest_process.returncode != 0:
                                 raise subprocess.SubprocessError(f"Command returned non-zero exit status {speedtest_process.returncode}. stderr: {stderr}")
                             
-                            # Parse JSON output
-                            data = json.loads(stdout)
-                            
-                            # Extract metrics
-                            download_speed = data['download'] / 1_000_000  # Convert to Mbps
-                            upload_speed = data['upload'] / 1_000_000  # Convert to Mbps
-                            ping = data['ping']
+                            # Check if stdout is empty or whitespace only
+                            if not stdout or stdout.isspace():
+                                raise ValueError("Empty response from speedtest-cli")
+                                
+                            # Parse JSON output with better error handling
+                            try:
+                                data = json.loads(stdout)
+                                
+                                # Extract metrics
+                                download_speed = data['download'] / 1_000_000  # Convert to Mbps
+                                upload_speed = data['upload'] / 1_000_000  # Convert to Mbps
+                                ping = data['ping']
+                            except json.JSONDecodeError as json_err:
+                                self.logger.error(f"Invalid JSON response from speedtest-cli: {json_err}")
+                                self.logger.debug(f"Raw output: {stdout[:200]}...")  # Log first 200 chars of output
+                                raise
                             
                             # Get connection metadata
                             isp = data.get('client', {}).get('isp', 'Unknown')

@@ -5,6 +5,7 @@ Provides comprehensive device fingerprinting capabilities.
 import logging
 import socket
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 import requests
