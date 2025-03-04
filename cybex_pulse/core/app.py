@@ -283,7 +283,9 @@ class CybexPulseApp:
         
         # Check if fingerprinting configuration has changed
         if self.network_scanner.fingerprinter is None and fingerprinting_enabled:
-            self.logger.info("Fingerprinting enabled, initializing fingerprinter")
+            # Only log if fingerprinting is enabled
+            if fingerprinting_enabled:
+                self.logger.info("Fingerprinting enabled, initializing fingerprinter")
             try:
                 from cybex_pulse.fingerprinting.scanner import DeviceFingerprinter
                 
@@ -292,7 +294,9 @@ class CybexPulseApp:
                 timeout = int(self.config.get("fingerprinting", "timeout", default=2))
                 
                 # Initialize fingerprinter with proper logging
-                self.logger.info(f"Creating DeviceFingerprinter with max_threads={max_threads}, timeout={timeout}")
+                # Only log if fingerprinting is enabled
+                if fingerprinting_enabled:
+                    self.logger.info(f"Creating DeviceFingerprinter with max_threads={max_threads}, timeout={timeout}")
                 self.network_scanner.fingerprinter = DeviceFingerprinter(
                     max_threads=max_threads,
                     timeout=timeout
@@ -301,9 +305,13 @@ class CybexPulseApp:
                 # No need to log again, the fingerprinter constructor already logs this
                 # self.logger.info(f"Device fingerprinting enabled with {self.network_scanner.fingerprinter.engine.get_signature_count()} signatures")
             except Exception as e:
-                self.logger.error(f"Failed to initialize device fingerprinter: {e}")
+                # Only log if fingerprinting is enabled
+                if fingerprinting_enabled:
+                    self.logger.error(f"Failed to initialize device fingerprinter: {e}")
         elif self.network_scanner.fingerprinter is not None and not fingerprinting_enabled:
-            self.logger.info("Fingerprinting disabled, removing fingerprinter")
+            # Only log if we're actually removing the fingerprinter
+            if self.network_scanner.fingerprinter is not None:
+                self.logger.info("Fingerprinting disabled, removing fingerprinter")
             self.network_scanner.fingerprinter = None
             
     def cleanup(self) -> None:
