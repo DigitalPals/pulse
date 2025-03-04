@@ -1006,7 +1006,7 @@ ensure_pulse_executable() {
     # Update the INSTALL_DIR in the pulse script
     log_info "Updating installation directory in pulse script..."
     
-    # Create a temporary file with the updated content
+    # Create a temporary file with the updated content - simplified version without virtual environment
     cat > /tmp/pulse.tmp << EOF
 #!/bin/bash
 # Cybex Pulse launcher script
@@ -1050,16 +1050,16 @@ EOT
     chmod +x "\$INSTALL_DIR/run_app.py"
 fi
 
-# Change to the Pulse directory, activate the virtual environment, and run the application
+# Change to the Pulse directory and run the application directly
 # Use exec to replace the shell process with Python to properly handle signals
-cd \$INSTALL_DIR && source venv/bin/activate && export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH && exec python "\$INSTALL_DIR/run_app.py" "\$@"
+cd \$INSTALL_DIR && export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH && exec python "\$INSTALL_DIR/run_app.py" "\$@"
 EOF
     
     # Replace the original pulse file with the updated one
     $SUDO_CMD mv /tmp/pulse.tmp "$INSTALL_DIR/pulse"
     $SUDO_CMD chmod +x "$INSTALL_DIR/pulse"
     
-    log_success "Pulse launcher script configured to use $INSTALL_DIR"
+    log_success "Pulse launcher script configured to use $INSTALL_DIR (without virtual environment)"
 }
 
 # Create a systemd service file
