@@ -1052,7 +1052,7 @@ fi
 
 # Change to the Pulse directory and run the application directly
 # Use exec to replace the shell process with Python to properly handle signals
-cd \$INSTALL_DIR && export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH && exec python "\$INSTALL_DIR/run_app.py" "\$@"
+cd \$INSTALL_DIR && export PYTHONPATH=\$INSTALL_DIR:\$PYTHONPATH && exec python3 "\$INSTALL_DIR/run_app.py" "\$@"
 EOF
     
     # Replace the original pulse file with the updated one
