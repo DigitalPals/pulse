@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from cybex_pulse.utils.mac_utils import normalize_mac
+
 logger = logging.getLogger("cybex_pulse.database")
 
 class DatabaseManager:
@@ -167,8 +169,8 @@ class DatabaseManager:
     
     # Device management methods
     
-    def add_device(self, mac_address: str, ip_address: str, hostname: str = "", 
-                  vendor: str = "", is_important: bool = False, **kwargs) -> int:
+    def add_device(self, mac_address: str, ip_address: str, hostname: str = "",
+                   vendor: str = "", is_important: bool = False, **kwargs) -> int:
         """Add a new device to the database.
         
         Args:
@@ -182,6 +184,9 @@ class DatabaseManager:
         Returns:
             int: ID of the newly added device
         """
+        # Normalize MAC address to lowercase for consistent storage
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         
@@ -226,9 +231,9 @@ class DatabaseManager:
             cursor.execute('SELECT id FROM devices WHERE mac_address = ?', (mac_address,))
             return cursor.fetchone()[0]
     
-    def update_device(self, mac_address: str, ip_address: str = None, 
-                     hostname: str = None, vendor: str = None, 
-                     notes: str = None, never_fingerprint: bool = None) -> bool:
+    def update_device(self, mac_address: str, ip_address: str = None,
+                      hostname: str = None, vendor: str = None,
+                      notes: str = None, never_fingerprint: bool = None) -> bool:
         """Update an existing device in the database.
         
         Args:
@@ -242,6 +247,9 @@ class DatabaseManager:
         Returns:
             bool: True if successful, False if device not found
         """
+        # Normalize MAC address to lowercase for consistent lookup
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         
@@ -299,6 +307,9 @@ class DatabaseManager:
         Returns:
             bool: True if successful, False if device not found
         """
+        # Normalize MAC address to lowercase for consistent lookup
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         
@@ -347,6 +358,9 @@ class DatabaseManager:
         Returns:
             Dict containing device information or None if not found
         """
+        # Normalize MAC address to lowercase for consistent lookup
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         
@@ -379,6 +393,9 @@ class DatabaseManager:
         Returns:
             bool: True if successful, False if device not found
         """
+        # Normalize MAC address to lowercase for consistent lookup
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         
@@ -406,6 +423,9 @@ class DatabaseManager:
         Returns:
             bool: True if successful, False if device not found
         """
+        # Normalize MAC address to lowercase for consistent lookup
+        mac_address = normalize_mac(mac_address)
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         

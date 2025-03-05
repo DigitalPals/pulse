@@ -3,6 +3,8 @@ API routes for device data.
 """
 import json
 
+from cybex_pulse.utils.mac_utils import normalize_mac
+
 
 def register_device_routes(app, server):
     """Register device API routes with the Flask application.
@@ -26,10 +28,13 @@ def register_device_routes(app, server):
         for device in all_devices:
             mac_address = device.get('mac_address')
             if mac_address:
+                # Normalize MAC address to lowercase for consistent comparison
+                normalized_mac = normalize_mac(mac_address)
+                
                 # If this MAC address is already in our unique devices dict,
                 # only replace it if the current device was seen more recently
-                if mac_address not in unique_devices or device.get('last_seen', 0) > unique_devices[mac_address].get('last_seen', 0):
-                    unique_devices[mac_address] = device
+                if normalized_mac not in unique_devices or device.get('last_seen', 0) > unique_devices[normalized_mac].get('last_seen', 0):
+                    unique_devices[normalized_mac] = device
         
         # Convert back to a list and sort by last_seen (descending)
         deduplicated_devices = list(unique_devices.values())

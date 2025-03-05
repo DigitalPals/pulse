@@ -15,6 +15,7 @@ import time
 from typing import Dict, List, Optional, Set, Tuple, Any
 
 from cybex_pulse.utils.debug_logger import DebugLogger
+from cybex_pulse.utils.mac_utils import normalize_mac, normalize_vendor
 
 from cybex_pulse.core.alerting import AlertManager
 from cybex_pulse.core.fingerprinting_manager import FingerprintingManager
@@ -279,13 +280,13 @@ class NetworkScanner:
                 current_device = {"ip": ip_address, "hostname": hostname, "vendor": "", "mac": ""}
                 continue
             
-            # Look for MAC address lines 
+            # Look for MAC address lines
             mac_match = re.search(r"MAC Address: ([0-9A-F:]{17}) \(([^)]+)\)", line)
             if mac_match and current_device:
                 mac_address = mac_match.group(1)
                 vendor = mac_match.group(2)
-                current_device["mac"] = mac_address
-                current_device["vendor"] = vendor
+                current_device["mac"] = normalize_mac(mac_address)
+                current_device["vendor"] = normalize_vendor(vendor)
                 continue
         
         # Add the last device if we have one
@@ -322,7 +323,7 @@ class NetworkScanner:
                 mac_match = re.search(r"at ([0-9a-f:]{17})", line, re.IGNORECASE)
                 if ip_match and mac_match:
                     ip = ip_match.group(1)
-                    mac = mac_match.group(1)
+                    mac = normalize_mac(mac_match.group(1))
                     arp_entries[ip] = mac
         except Exception as e:
             self.logger.debug(f"Error getting ARP entries: {e}")
@@ -443,7 +444,7 @@ class NetworkScanner:
                     hostname, ip_address, mac_address = match.groups()
                     devices.append({
                         "ip": ip_address,
-                        "mac": mac_address,
+                        "mac": normalize_mac(mac_address),
                         "vendor": "",
                         "hostname": hostname
                     })
@@ -470,7 +471,7 @@ class NetworkScanner:
                         
                         devices.append({
                             "ip": ip_address,
-                            "mac": mac_address,
+                            "mac": normalize_mac(mac_address),
                             "vendor": "",
                             "hostname": hostname
                         })
@@ -531,13 +532,12 @@ class NetworkScanner:
                 
                 devices.append({
                     "ip": ip_address,
-                    "mac": mac_address,
-                    "vendor": vendor.strip(),
+                    "mac": normalize_mac(mac_address),
+                    "vendor": normalize_vendor(vendor.strip()),
                     "hostname": hostname
                 })
         
         return devices
-    
     def _process_scan_results(self, devices: List[Dict[str, str]]) -> None:
         """Process scan results and update database.
         
@@ -555,6 +555,12 @@ class NetworkScanner:
             
             if not mac_address or not ip_address:
                 continue
+            
+            # Normalize MAC address to lowercase for consistent comparison
+            mac_address = normalize_mac(mac_address)
+            
+            # Normalize vendor name to remove inconsistencies
+            vendor = normalize_vendor(vendor)
                 
             # Skip if this device is already being processed in this scan cycle
             # This prevents duplicate entries with the same MAC address
@@ -566,6 +572,7 @@ class NetworkScanner:
             self.processing_devices.add(mac_address)
             
             # Add to current scan devices
+            self.current_scan_devices.add(mac_address)
             self.current_scan_devices.add(mac_address)
             
             # Check if device exists in database
@@ -738,6 +745,9 @@ class NetworkScanner:
         offline_devices = self.previous_scan_devices - self.current_scan_devices
         
         for mac_address in offline_devices:
+            # Normalize MAC address to lowercase for consistent comparison
+            mac_address = normalize_mac(mac_address)
+            
             # Double-check that this device is truly offline and not just processed earlier
             # This prevents a device from being marked as both online and offline in the same scan
             if mac_address in self.processing_devices:
