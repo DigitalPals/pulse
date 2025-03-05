@@ -568,7 +568,7 @@ class ScanResult:
 class DeviceFingerprinter:
     """Performs advanced fingerprinting on network devices."""
     
-    def __init__(self, max_threads: int = 10, timeout: float = 2, cache_size: int = 1000):
+    def __init__(self, max_threads: int = 10, timeout: float = 2, cache_size: int = 1000, db_manager=None, config=None):
         """
         Initialize the device fingerprinter.
         
@@ -576,6 +576,8 @@ class DeviceFingerprinter:
             max_threads: Maximum number of concurrent threads
             timeout: Timeout for network operations in seconds
             cache_size: Maximum number of MAC addresses to keep in the cache
+            db_manager: Optional database manager instance
+            config: Optional configuration manager instance
         """
         logger.info("Initializing DeviceFingerprinter...")
         self.engine = FingerprintEngine()
@@ -585,12 +587,19 @@ class DeviceFingerprinter:
         self.fingerprinted_mac_addresses: Set[str] = set()
         self.fingerprint_timestamps: Dict[str, float] = {}  # Track when devices were fingerprinted
         self.cache_lock = threading.RLock()  # Thread-safe cache operations
+        self.db_manager = db_manager  # Store database manager reference
+        self.config = config  # Store configuration manager reference
         
         # Initialize scanner components
         self.port_scanner = PortScanner(timeout, max_threads)
         self.http_scanner = HttpScanner(timeout, self.engine.signatures)
         self.snmp_scanner = SnmpScanner(timeout)
         self.mdns_scanner = MdnsScanner(timeout)
+        
+        # Get API port from config if available
+        self.api_port = 8000  # Default port
+        if self.config:
+            self.api_port = self.config.get("web_interface", "port", 8000)
         
         logger.info(f"DeviceFingerprinter initialized with {self.engine.get_signature_count()} signatures")
     
@@ -809,6 +818,7 @@ class DeviceFingerprinter:
             self._clear_device_cache([device.get('mac_address') for device in devices])
         
         # Filter already fingerprinted devices
+        # This now checks both in-memory cache and database
         filtered_devices = self._filter_fingerprinted_devices(devices, force_scan)
         
         if not filtered_devices:
@@ -872,9 +882,33 @@ class DeviceFingerprinter:
                         result = future.result(timeout=0.5)
                         results.append(result)
                         
-                        # Update timestamp for this device
+                        # Update timestamp for this device and mark it as fingerprinted
                         with self.cache_lock:
-                            self.fingerprint_timestamps[device['mac_address']] = time.time()
+                            mac = device['mac_address']
+                            # Only add to fingerprinted cache if the device was successfully identified with high confidence
+                            identification = result.get('identification', [])
+                            if identification and len(identification) > 0:
+                                # Check if the best match has high enough confidence
+                                best_match = identification[0]
+                                confidence = best_match.get('confidence', 0)
+                                threshold = 0.5
+                                if self.config:
+                                    threshold = float(self.config.get("fingerprinting", "confidence_threshold", 0.5))
+                                
+                                if confidence >= threshold:
+                                    logger.info(f"Adding device {mac} to fingerprinted cache with confidence {confidence}")
+                                    self.fingerprinted_mac_addresses.add(mac)
+                                    self.fingerprint_timestamps[mac] = time.time()
+                                    
+                                    # Mark the device as fingerprinted in the database to prevent re-fingerprinting
+                                    if self.db_manager:
+                                        self.db_manager.update_device_metadata(mac, {'is_fingerprinted': True})
+                                        # Verify that the is_fingerprinted flag was set
+                                        updated_device = self.db_manager.get_device(mac)
+                                        if updated_device and updated_device.get("is_fingerprinted"):
+                                            logger.debug(f"Successfully marked device {mac} as fingerprinted in database")
+                                        else:
+                                            logger.warning(f"Failed to mark device {mac} as fingerprinted in database")
                             
                     except Exception as e:
                         logger.error(f"Error fingerprinting device {device['ip_address']}: {str(e)}")
@@ -973,6 +1007,16 @@ class DeviceFingerprinter:
                     self.fingerprinted_mac_addresses.remove(mac)
                     self.fingerprint_timestamps.pop(mac, None)
                     logger.info(f"Cleared from in-memory cache: {mac} (forced scan)")
+                
+                # Also reset the is_fingerprinted flag in the database
+                # This allows the device to be fingerprinted again when a manual scan is triggered
+                if self.db_manager:
+                    try:
+                        # Reset the is_fingerprinted flag but keep other fingerprinting data
+                        self.db_manager.update_device_metadata(mac, {'is_fingerprinted': False})
+                        logger.info(f"Reset is_fingerprinted flag in database for device: {mac} (forced scan)")
+                    except Exception as e:
+                        logger.error(f"Error resetting is_fingerprinted flag for device {mac}: {e}")
     
     def _filter_fingerprinted_devices(self, devices: List[Dict[str, str]],
                                   force_scan: bool) -> List[Dict[str, str]]:
@@ -993,16 +1037,150 @@ class DeviceFingerprinter:
         with self.cache_lock:
             for device in devices:
                 mac = device.get('mac_address', '')
-                if not mac or mac in self.fingerprinted_mac_addresses:
-                    logger.info(f"Skipping already fingerprinted device: {mac}")
+                if not mac:
                     continue
-                    
+                
+                # First check in-memory cache for devices already processed in this session
+                if mac in self.fingerprinted_mac_addresses:
+                    logger.info(f"Skipping already fingerprinted device (in-memory cache): {mac}")
+                    continue
+                
+                # If not in memory cache, check if this device is already properly fingerprinted in the database
+                # This requires access to the database manager, which we don't have directly in this class
+                # We'll use a helper method to check if the device is already fingerprinted
+                if self._is_device_already_fingerprinted(mac, device.get('ip_address', '')):
+                    logger.info(f"Skipping already fingerprinted device (database check): {mac}")
+                    # Add to in-memory cache to avoid future database checks
+                    self.fingerprinted_mac_addresses.add(mac)
+                    self.fingerprint_timestamps[mac] = time.time()
+                    continue
+                
+                # Only add devices that need fingerprinting to the filtered list
                 filtered_devices.append(device)
-                # Track this device as processed
-                self.fingerprinted_mac_addresses.add(mac)
-                self.fingerprint_timestamps[mac] = time.time()
+                # We don't add to fingerprinted_mac_addresses here because the device hasn't been fingerprinted yet
+                # It will be added after successful fingerprinting in fingerprint_network method
             
         return filtered_devices
+        
+    def _is_device_already_fingerprinted(self, mac_address: str, ip_address: str) -> bool:
+        """
+        Check if a device is already properly fingerprinted in the database.
+        
+        Args:
+            mac_address: Device MAC address
+            ip_address: Device IP address
+            
+        Returns:
+            True if device is already properly fingerprinted, False otherwise
+        """
+        try:
+            # First try to use the database manager if available
+            if self.db_manager:
+                # Get device from database
+                device_info = self.db_manager.get_device(mac_address)
+                if not device_info:
+                    return False
+                
+                # First check if the device is explicitly marked as fingerprinted
+                # This is the primary check that should be respected
+                if device_info.get("is_fingerprinted", False):
+                    logger.debug(f"Device {mac_address} is marked as fingerprinted in the database, skipping automatic fingerprinting")
+                    return True
+                
+                # If not explicitly marked, check if device is already properly fingerprinted
+                # This is a fallback for devices that were fingerprinted before the is_fingerprinted flag was added
+                existing_type = device_info.get("device_type", "")
+                fingerprint_date = device_info.get("fingerprint_date", 0)
+                fingerprint_confidence = device_info.get("fingerprint_confidence", 0)
+                
+                # Consider a device already fingerprinted only if it has:
+                # 1. A non-empty device type that isn't "unknown" or "unidentified"
+                # 2. AND a valid fingerprint date with high confidence
+                unknown_types = ["", "unknown", "unidentified", None]
+                has_valid_type = existing_type not in unknown_types
+                has_valid_date = fingerprint_date is not None and fingerprint_date > 0
+                
+                # Use a reasonable threshold to determine if a device is well-fingerprinted
+                # If config is available, use the configured threshold
+                threshold = 0.5
+                if self.config:
+                    threshold = float(self.config.get("fingerprinting", "confidence_threshold", 0.5))
+                
+                has_high_confidence = fingerprint_confidence is not None and fingerprint_confidence >= threshold
+                
+                # Only consider a device fully fingerprinted if it has both valid type, date, and high confidence
+                already_fingerprinted = has_valid_type and has_valid_date and has_high_confidence
+                
+                # If the device is already fingerprinted by these criteria, mark it explicitly
+                # This ensures the is_fingerprinted flag is set for devices that were fingerprinted
+                # before this flag was introduced
+                if already_fingerprinted and not device_info.get("is_fingerprinted", False):
+                    logger.debug(f"Device {mac_address} meets fingerprinting criteria but is not explicitly marked. Setting is_fingerprinted flag.")
+                    self.db_manager.update_device_metadata(mac_address, {'is_fingerprinted': True})
+                
+                # Log the decision for debugging
+                if already_fingerprinted:
+                    logger.debug(f"Device {mac_address} is already fingerprinted: type={existing_type}, confidence={fingerprint_confidence}, date={fingerprint_date}")
+                
+                return already_fingerprinted
+            
+            # If database manager is not available, fall back to API check
+            try:
+                import requests
+                from urllib3.exceptions import InsecureRequestWarning
+                requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+                
+                # Try to get the device info from the local API
+                response = requests.get(
+                    f"http://localhost:{self.api_port}/api/devices/{mac_address}",
+                    timeout=1,
+                    verify=False
+                )
+                
+                if response.status_code == 200:
+                    device_info = response.json()
+                    
+                    # First check if the device is explicitly marked as fingerprinted
+                    if device_info.get("is_fingerprinted", False):
+                        logger.debug(f"Device {mac_address} is marked as fingerprinted (API check)")
+                        return True
+                    
+                    # If not explicitly marked, check if device is already properly fingerprinted
+                    existing_type = device_info.get("device_type", "")
+                    fingerprint_date = device_info.get("fingerprint_date", 0)
+                    fingerprint_confidence = device_info.get("fingerprint_confidence", 0)
+                    
+                    # Consider a device already fingerprinted only if it has:
+                    # 1. A non-empty device type that isn't "unknown" or "unidentified"
+                    # 2. AND a valid fingerprint date with high confidence
+                    unknown_types = ["", "unknown", "unidentified", None]
+                    has_valid_type = existing_type not in unknown_types
+                    has_valid_date = fingerprint_date is not None and fingerprint_date > 0
+                    
+                    # Use a reasonable threshold to determine if a device is well-fingerprinted
+                    threshold = 0.5
+                    if self.config:
+                        threshold = float(self.config.get("fingerprinting", "confidence_threshold", 0.5))
+                    
+                    has_high_confidence = fingerprint_confidence is not None and fingerprint_confidence >= threshold
+                    
+                    # Only consider a device fully fingerprinted if it has both valid type, date, and high confidence
+                    already_fingerprinted = has_valid_type and has_valid_date and has_high_confidence
+                    
+                    # Log the decision for debugging
+                    if already_fingerprinted:
+                        logger.debug(f"Device {mac_address} is already fingerprinted (API check): type={existing_type}, confidence={fingerprint_confidence}, date={fingerprint_date}")
+                    
+                    return already_fingerprinted
+            except Exception as e:
+                logger.debug(f"Error checking device fingerprint status via API: {e}")
+                
+            # If all checks fail, assume the device is not fingerprinted to be safe
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking if device is already fingerprinted: {e}")
+            return False
         
     def clear_all_caches(self) -> None:
         """Clear all in-memory caches."""

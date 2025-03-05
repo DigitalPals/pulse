@@ -60,7 +60,8 @@ class DatabaseManager:
             device_manufacturer TEXT,
             fingerprint_confidence REAL,
             fingerprint_date INTEGER,
-            never_fingerprint BOOLEAN DEFAULT 0
+            never_fingerprint BOOLEAN DEFAULT 0,
+            is_fingerprinted BOOLEAN DEFAULT 0
         )
         ''')
         
@@ -149,6 +150,11 @@ class DatabaseManager:
             logger.info("Adding missing never_fingerprint column to devices table")
             cursor.execute("ALTER TABLE devices ADD COLUMN never_fingerprint BOOLEAN DEFAULT 0")
             
+        # Add is_fingerprinted column if it doesn't exist
+        if 'is_fingerprinted' not in existing_device_columns:
+            logger.info("Adding missing is_fingerprinted column to devices table")
+            cursor.execute("ALTER TABLE devices ADD COLUMN is_fingerprinted BOOLEAN DEFAULT 0")
+            
         # Check for missing columns in speed_tests table and add them if needed
         cursor.execute("PRAGMA table_info(speed_tests)")
         existing_speed_test_columns = [column[1] for column in cursor.fetchall()]
@@ -198,18 +204,19 @@ class DatabaseManager:
         device_manufacturer = kwargs.get('device_manufacturer', '')
         fingerprint_confidence = kwargs.get('fingerprint_confidence', None)
         fingerprint_date = kwargs.get('fingerprint_date', None)
+        is_fingerprinted = kwargs.get('is_fingerprinted', False)
         
         try:
             cursor.execute('''
-            INSERT INTO devices (mac_address, ip_address, hostname, vendor, 
-                               first_seen, last_seen, is_important, 
+            INSERT INTO devices (mac_address, ip_address, hostname, vendor,
+                               first_seen, last_seen, is_important,
                                device_type, device_model, device_manufacturer,
-                               fingerprint_confidence, fingerprint_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (mac_address, ip_address, hostname, vendor, 
+                               fingerprint_confidence, fingerprint_date, is_fingerprinted)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (mac_address, ip_address, hostname, vendor,
                  current_time, current_time, is_important,
                  device_type, device_model, device_manufacturer,
-                 fingerprint_confidence, fingerprint_date))
+                 fingerprint_confidence, fingerprint_date, is_fingerprinted))
             
             conn.commit()
             device_id = cursor.lastrowid
@@ -219,14 +226,15 @@ class DatabaseManager:
             # Device already exists, update it instead
             self.update_device(mac_address, ip_address, hostname, vendor)
             # Also update metadata if provided
-            if any(key in kwargs for key in ['device_type', 'device_model', 'device_manufacturer', 
-                                           'fingerprint_confidence', 'fingerprint_date']):
+            if any(key in kwargs for key in ['device_type', 'device_model', 'device_manufacturer',
+                                           'fingerprint_confidence', 'fingerprint_date', 'is_fingerprinted']):
                 self.update_device_metadata(mac_address, {
                     'device_type': device_type,
-                    'device_model': device_model, 
+                    'device_model': device_model,
                     'device_manufacturer': device_manufacturer,
                     'fingerprint_confidence': fingerprint_confidence,
-                    'fingerprint_date': fingerprint_date
+                    'fingerprint_date': fingerprint_date,
+                    'is_fingerprinted': is_fingerprinted
                 })
             cursor.execute('SELECT id FROM devices WHERE mac_address = ?', (mac_address,))
             return cursor.fetchone()[0]
@@ -318,8 +326,8 @@ class DatabaseManager:
         params = []
         
         valid_fields = [
-            'device_type', 'device_model', 'device_manufacturer', 
-            'fingerprint_confidence', 'fingerprint_date'
+            'device_type', 'device_model', 'device_manufacturer',
+            'fingerprint_confidence', 'fingerprint_date', 'is_fingerprinted'
         ]
         
         for field, value in metadata.items():
@@ -430,12 +438,13 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute('''
-        UPDATE devices 
+        UPDATE devices
         SET device_type = NULL,
             device_model = NULL,
             device_manufacturer = NULL,
             fingerprint_confidence = NULL,
-            fingerprint_date = NULL
+            fingerprint_date = NULL,
+            is_fingerprinted = 0
         WHERE mac_address = ?
         ''', (mac_address,))
         

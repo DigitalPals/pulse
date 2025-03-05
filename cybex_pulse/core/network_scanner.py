@@ -578,62 +578,70 @@ class NetworkScanner:
             # Check if device exists in database
             existing_device = self.db_manager.get_device(mac_address)
             
-            # Process vendor information from nmap -sn results
-            device_identified = False
-            device_type = ""
-            manufacturer = ""
-            model = ""
-            confidence = 0.0
-            
-            # Try to identify device from vendor string
-            if vendor:
-                self.logger.debug(f"Device {mac_address} vendor from nmap: {vendor}")
+            # First check if the device is already marked as fingerprinted in the database
+            # If it is, skip vendor identification completely
+            if existing_device and existing_device.get("is_fingerprinted", False):
+                self.logger.info(f"Device {mac_address} is already marked as fingerprinted, skipping vendor identification")
+                device_identified = False
+            else:
+                is_fingerprinted = existing_device.get('is_fingerprinted') if existing_device else False
+                self.logger.info(f"Device {mac_address} is NOT marked as fingerprinted (is_fingerprinted={is_fingerprinted}), will check vendor identification")
+                # Process vendor information from nmap -sn results
+                device_identified = False
+                device_type = ""
+                manufacturer = ""
+                model = ""
+                confidence = 0.0
                 
-                # Extract manufacturer from vendor string
-                manufacturer = vendor.split(" ")[0] if " " in vendor else vendor
-                
-                # Simplified mapping of common vendor names to device types
-                vendor_to_device_mapping = {
-                    "Philips": {"type": "lighting", "model": "Hue"},
-                    "Phillips": {"type": "lighting", "model": "Hue"},  # Common misspelling
-                    "TP-Link": {"type": "networking", "model": ""},
-                    "Amazon": {"type": "media", "model": "Echo"},
-                    "Apple": {"type": "computer", "model": ""},
-                    "Google": {"type": "media", "model": ""},
-                    "Samsung": {"type": "media", "model": ""},
-                    "Sonos": {"type": "media", "model": "Speaker"},
-                    "Nest": {"type": "thermostat", "model": ""},
-                    "Ring": {"type": "camera", "model": "Doorbell"},
-                    "Wyze": {"type": "camera", "model": ""},
-                    "Roku": {"type": "media", "model": ""},
-                    "Belkin": {"type": "networking", "model": ""},
-                    "Netgear": {"type": "networking", "model": ""},
-                    "D-Link": {"type": "networking", "model": ""},
-                    "Synology": {"type": "nas", "model": ""},
-                    "QNAP": {"type": "nas", "model": ""},
-                    "Ubiquiti": {"type": "networking", "model": ""},
-                    "Cisco": {"type": "networking", "model": ""},
-                    "Linksys": {"type": "networking", "model": ""},
-                    "Asus": {"type": "networking", "model": ""},
-                    "AVM": {"type": "networking", "model": ""},
-                }
-                
-                # Check if we can identify the device from the vendor alone
-                for v_key, v_info in vendor_to_device_mapping.items():
-                    if v_key.lower() in vendor.lower():
-                        device_type = v_info["type"]
-                        model = v_info["model"]
-                        confidence = 0.8  # High confidence for direct vendor match
-                        device_identified = True
-                        break
-                
-                # If device was identified from vendor, update the fingerprint data
-                if device_identified:
-                    device_name = f"{manufacturer} {model}" if manufacturer and model else hostname or mac_address
-                    self.logger.info(
-                        f"Device identified from nmap vendor: {device_name} ({ip_address}) "
-                        f"as {device_type} with {confidence:.2f} confidence"
-                    )
+                # Try to identify device from vendor string
+                if vendor:
+                    self.logger.debug(f"Device {mac_address} vendor from nmap: {vendor}")
+                    
+                    # Extract manufacturer from vendor string
+                    manufacturer = vendor.split(" ")[0] if " " in vendor else vendor
+                    
+                    # Simplified mapping of common vendor names to device types
+                    vendor_to_device_mapping = {
+                        "Philips": {"type": "lighting", "model": "Hue"},
+                        "Phillips": {"type": "lighting", "model": "Hue"},  # Common misspelling
+                        "TP-Link": {"type": "networking", "model": ""},
+                        "Amazon": {"type": "media", "model": "Echo"},
+                        "Apple": {"type": "computer", "model": ""},
+                        "Google": {"type": "media", "model": ""},
+                        "Samsung": {"type": "media", "model": ""},
+                        "Sonos": {"type": "media", "model": "Speaker"},
+                        "Nest": {"type": "thermostat", "model": ""},
+                        "Ring": {"type": "camera", "model": "Doorbell"},
+                        "Wyze": {"type": "camera", "model": ""},
+                        "Roku": {"type": "media", "model": ""},
+                        "Belkin": {"type": "networking", "model": ""},
+                        "Netgear": {"type": "networking", "model": ""},
+                        "D-Link": {"type": "networking", "model": ""},
+                        "Synology": {"type": "nas", "model": ""},
+                        "QNAP": {"type": "nas", "model": ""},
+                        "Ubiquiti": {"type": "networking", "model": ""},
+                        "Cisco": {"type": "networking", "model": ""},
+                        "Linksys": {"type": "networking", "model": ""},
+                        "Asus": {"type": "networking", "model": ""},
+                        "AVM": {"type": "networking", "model": ""},
+                    }
+                    
+                    # Check if we can identify the device from the vendor alone
+                    for v_key, v_info in vendor_to_device_mapping.items():
+                        if v_key.lower() in vendor.lower():
+                            device_type = v_info["type"]
+                            model = v_info["model"]
+                            confidence = 0.8  # High confidence for direct vendor match
+                            device_identified = True
+                            break
+                    
+                    # If device was identified from vendor, update the fingerprint data
+                    if device_identified:
+                        device_name = f"{manufacturer} {model}" if manufacturer and model else hostname or mac_address
+                        self.logger.info(
+                            f"Device identified from nmap vendor: {device_name} ({ip_address}) "
+                            f"as {device_type} with {confidence:.2f} confidence"
+                        )
             
             if existing_device:
                 # Prepare update parameters - always update IP address
@@ -654,41 +662,90 @@ class NetworkScanner:
                 self.db_manager.update_device(mac_address, **update_params)
                 
                 # Check if we should update fingerprinting info based on nmap results
-                if device_identified:
-                    device_info = {
-                        'device_type': device_type,
-                        'device_model': model,
-                        'device_manufacturer': manufacturer,
-                        'fingerprint_confidence': confidence,
-                        'fingerprint_date': int(time.time())
-                    }
-                    self.db_manager.update_device_metadata(mac_address, device_info)
-                    
-                    # Log event for identified devices
-                    # Use existing_device.get('hostname') to ensure we use the DB-stored hostname value
-                    hostname = existing_device.get('hostname', '')
-                    device_name = f"{manufacturer} {model}" if manufacturer and model else (hostname or mac_address)
-                    self.db_manager.log_event(
-                        self.db_manager.EVENT_DEVICE_FINGERPRINTED,
-                        "info",
-                        f"Device identified: {device_name} ({ip_address})",
-                        json.dumps({
-                            'mac': mac_address, 
-                            'ip': ip_address, 
-                            'hostname': hostname,
-                            'manufacturer': manufacturer,
-                            'model': model,
-                            'device_type': device_type,
-                            'confidence': confidence
-                        })
-                    )
+                if device_identified and existing_device:
+                    # First check if the device is already marked as fingerprinted
+                    if existing_device.get("is_fingerprinted", False):
+                        self.logger.debug(f"Device {mac_address} is already marked as fingerprinted, skipping vendor identification")
+                    else:
+                        # Check if device is already properly fingerprinted
+                        existing_type = existing_device.get("device_type", "")
+                        fingerprint_date = existing_device.get("fingerprint_date", 0)
+                        fingerprint_confidence = existing_device.get("fingerprint_confidence", 0)
+                        
+                        unknown_types = ["", "unknown", "unidentified", None]
+                        has_valid_type = existing_type not in unknown_types
+                        has_valid_date = fingerprint_date is not None and fingerprint_date > 0
+                        
+                        threshold = float(self.config.get("fingerprinting", "confidence_threshold", 0.5))
+                        has_high_confidence = fingerprint_confidence is not None and fingerprint_confidence >= threshold
+                        
+                        already_fingerprinted = has_valid_type and has_valid_date and has_high_confidence
+                        
+                        # If the device meets fingerprinting criteria but isn't explicitly marked,
+                        # update the database to set the is_fingerprinted flag
+                        if already_fingerprinted and not existing_device.get("is_fingerprinted"):
+                            self.logger.debug(f"Device {mac_address} meets fingerprinting criteria but is not explicitly marked. Setting is_fingerprinted flag.")
+                            self.db_manager.update_device_metadata(mac_address, {'is_fingerprinted': True})
+                            # Skip further processing since we've marked it as fingerprinted
+                            continue
+                        
+                        # Only update if the device is not already fingerprinted or if the new confidence is higher
+                        if not already_fingerprinted or confidence > fingerprint_confidence:
+                            self.logger.debug(f"Updating fingerprint info for device {mac_address} from vendor match")
+                            device_info = {
+                                'device_type': device_type,
+                                'device_model': model,
+                                'device_manufacturer': manufacturer,
+                                'fingerprint_confidence': confidence,
+                                'fingerprint_date': int(time.time()),
+                                'is_fingerprinted': True  # Mark the device as fingerprinted to prevent automatic re-fingerprinting
+                            }
+                            self.db_manager.update_device_metadata(mac_address, device_info)
+                            
+                            # Verify that the is_fingerprinted flag was set
+                            updated_device = self.db_manager.get_device(mac_address)
+                            if updated_device and updated_device.get("is_fingerprinted"):
+                                self.logger.debug(f"Successfully marked device {mac_address} as fingerprinted in database")
+                            else:
+                                self.logger.warning(f"Failed to mark device {mac_address} as fingerprinted in database")
+                            
+                            # Log event for identified devices
+                            # Use existing_device.get('hostname') to ensure we use the DB-stored hostname value
+                            hostname = existing_device.get('hostname', '')
+                            device_name = f"{manufacturer} {model}" if manufacturer and model else (hostname or mac_address)
+                            self.db_manager.log_event(
+                                self.db_manager.EVENT_DEVICE_FINGERPRINTED,
+                                "info",
+                                f"Device identified: {device_name} ({ip_address})",
+                                json.dumps({
+                                    'mac': mac_address,
+                                    'ip': ip_address,
+                                    'hostname': hostname,
+                                    'manufacturer': manufacturer,
+                                    'model': model,
+                                    'device_type': device_type,
+                                    'confidence': confidence
+                                })
+                            )
+                        else:
+                            self.logger.debug(
+                                f"Device {mac_address} already fingerprinted with higher or equal confidence "
+                                f"({fingerprint_confidence} >= {confidence}), skipping update"
+                            )
                 else:
-                    # Add to fingerprinting queue if not already identified
+                    # Add to fingerprinting queue only if not already identified and not already fingerprinted
                     if self.fingerprinting_manager.is_enabled():
-                        devices_to_fingerprint.append({
-                            "ip_address": ip_address, 
-                            "mac_address": mac_address
-                        })
+                        # First check if the device is explicitly marked as fingerprinted
+                        if existing_device.get("is_fingerprinted", False):
+                            self.logger.debug(f"Device {mac_address} is already marked as fingerprinted, skipping fingerprinting")
+                        # Otherwise check if the device should be fingerprinted (not already fingerprinted with high confidence)
+                        elif self.fingerprinting_manager.should_fingerprint_device(existing_device):
+                            devices_to_fingerprint.append({
+                                "ip_address": ip_address,
+                                "mac_address": mac_address
+                            })
+                        else:
+                            self.logger.debug(f"Skipping fingerprinting for already fingerprinted device: {mac_address} ({ip_address})")
             else:
                 # New device detected
                 device_name = hostname or vendor or mac_address
@@ -707,18 +764,35 @@ class NetworkScanner:
                         "device_model": model,
                         "device_manufacturer": manufacturer,
                         "fingerprint_confidence": confidence,
-                        "fingerprint_date": int(time.time())
+                        "fingerprint_date": int(time.time()),
+                        "is_fingerprinted": True  # Mark the device as fingerprinted to prevent automatic re-fingerprinting
                     })
                 
                 # Add to database
                 self.db_manager.add_device(mac_address, ip_address, **add_data)
                 
-                # Add to advanced fingerprinting queue if not identified from vendor
+                # Verify that the is_fingerprinted flag was set for devices identified from vendor
+                if device_identified:
+                    new_device = self.db_manager.get_device(mac_address)
+                    if new_device and new_device.get("is_fingerprinted"):
+                        self.logger.debug(f"Successfully marked new device {mac_address} as fingerprinted in database")
+                    else:
+                        self.logger.warning(f"Failed to mark new device {mac_address} as fingerprinted in database")
+                
+                # For new devices, add to fingerprinting queue if not identified from vendor
+                # (New devices won't have fingerprinting data in the database yet)
                 if not device_identified and self.fingerprinting_manager.is_enabled():
-                    devices_to_fingerprint.append({
-                        "ip_address": ip_address, 
-                        "mac_address": mac_address
-                    })
+                    # Get the newly created device from the database to check if it should be fingerprinted
+                    new_device = self.db_manager.get_device(mac_address)
+                    if new_device and not new_device.get("is_fingerprinted", False):
+                        self.logger.debug(f"Adding new device to fingerprinting queue: {mac_address} ({ip_address})")
+                        devices_to_fingerprint.append({
+                            "ip_address": ip_address,
+                            "mac_address": mac_address
+                        })
+                    else:
+                        is_fingerprinted = new_device.get("is_fingerprinted", False) if new_device else False
+                        self.logger.debug(f"New device {mac_address} is {'already marked as fingerprinted' if is_fingerprinted else 'not found in database'}, skipping")
                 
                 # Log event
                 self.db_manager.log_event(
@@ -758,27 +832,30 @@ class NetworkScanner:
             if not device:
                 continue
             
-            device_name = device.get('hostname') or device.get('vendor') or mac_address
-            self.logger.info(f"Device went offline: {device_name} ({device['ip_address']})")
+            ip_address = device.get('ip_address', 'Unknown')
+            hostname = device.get('hostname', '')
+            vendor = device.get('vendor', '')
+            device_name = hostname or vendor or mac_address
+            self.logger.info(f"Device went offline: {device_name} ({ip_address})")
             
             # Don't log events for devices without a hostname
-            if device.get('hostname'):
+            if hostname:
                 # Log event with device name and IP
                 self.db_manager.log_event(
                     self.db_manager.EVENT_DEVICE_OFFLINE,
                     "info",
-                    f"Device went offline: {device.get('hostname')} ({device['ip_address']})",
-                    json.dumps({"mac": mac_address, "ip": device['ip_address'], "hostname": device.get('hostname', '')})
+                    f"Device went offline: {hostname} ({ip_address})",
+                    json.dumps({"mac": mac_address, "ip": ip_address, "hostname": hostname})
                 )
             
             # Send alert if enabled
-            if device["is_important"] and self.config.get("alerts", "important_device_offline"):
+            if device.get("is_important", False) and self.config.get("alerts", "important_device_offline"):
                 self.alert_manager.send_alert(
                     "Important Device Offline",
-                    f"Important device went offline:\nName: {device.get('hostname') or 'Unknown'}\nMAC: {mac_address}\nIP: {device['ip_address']}\nVendor: {device['vendor']}"
+                    f"Important device went offline:\nName: {hostname or 'Unknown'}\nMAC: {mac_address}\nIP: {ip_address}\nVendor: {vendor}"
                 )
             elif self.config.get("alerts", "device_offline"):
                 self.alert_manager.send_alert(
                     "Device Offline",
-                    f"Device went offline:\nName: {device.get('hostname') or 'Unknown'}\nMAC: {mac_address}\nIP: {device['ip_address']}\nVendor: {device['vendor']}"
+                    f"Device went offline:\nName: {hostname or 'Unknown'}\nMAC: {mac_address}\nIP: {ip_address}\nVendor: {vendor}"
                 )

@@ -57,7 +57,9 @@ class FingerprintingManager:
                 self.logger.info(f"Creating DeviceFingerprinter with max_threads={max_threads}, timeout={timeout}")
                 self.fingerprinter = DeviceFingerprinter(
                     max_threads=max_threads,
-                    timeout=timeout
+                    timeout=timeout,
+                    db_manager=self.db_manager,
+                    config=self.config
                 )
             except Exception as e:
                 self.logger.error(f"Failed to initialize device fingerprinter: {e}")
@@ -119,22 +121,34 @@ class FingerprintingManager:
             
         mac_address = device.get("mac_address")
         if not mac_address:
+            self.logger.debug(f"Device has no MAC address, skipping fingerprinting")
             return False
             
         # Get device from database
         db_device = self.db_manager.get_device(mac_address)
         if not db_device:
+            self.logger.debug(f"Device {mac_address} not found in database, skipping fingerprinting")
             return False
             
         # Check if device is marked as never fingerprint
         if db_device.get("never_fingerprint"):
+            self.logger.debug(f"Device {mac_address} marked as never fingerprint, skipping")
             return False
             
         # For forced scans, we include the device without additional checks
+        # This allows manual re-fingerprinting from the device details page
         if force_scan:
+            self.logger.debug(f"Force scan enabled for device {mac_address}, will fingerprint")
             return True
             
-        # Check if device is already properly fingerprinted
+        # Check if device is already marked as fingerprinted
+        # This is the primary check that prevents automatic re-fingerprinting
+        if db_device.get("is_fingerprinted"):
+            self.logger.debug(f"Device {mac_address} is already marked as fingerprinted, skipping automatic fingerprinting")
+            return False
+            
+        # If not explicitly marked as fingerprinted, check if it meets the criteria
+        # This is a fallback for devices that were fingerprinted before the is_fingerprinted flag was added
         existing_type = db_device.get("device_type", "")
         fingerprint_date = db_device.get("fingerprint_date", 0)
         fingerprint_confidence = db_device.get("fingerprint_confidence", 0)
@@ -153,7 +167,24 @@ class FingerprintingManager:
         # Only consider a device fully fingerprinted if it has both valid type, date, and high confidence
         already_fingerprinted = has_valid_type and has_valid_date and has_high_confidence
         
-        return not already_fingerprinted
+        # If the device meets the fingerprinting criteria but isn't explicitly marked,
+        # update the database to set the is_fingerprinted flag
+        if already_fingerprinted and not db_device.get("is_fingerprinted"):
+            self.logger.debug(f"Device {mac_address} meets fingerprinting criteria but is not explicitly marked. Setting is_fingerprinted flag.")
+            self.db_manager.update_device_metadata(mac_address, {'is_fingerprinted': True})
+        
+        if already_fingerprinted:
+            self.logger.debug(
+                f"Device {mac_address} already fingerprinted: type={existing_type}, "
+                f"confidence={fingerprint_confidence}, date={fingerprint_date}, skipping"
+            )
+            return False
+        else:
+            self.logger.debug(
+                f"Device {mac_address} needs fingerprinting: type={existing_type}, "
+                f"confidence={fingerprint_confidence}, date={fingerprint_date}"
+            )
+            return True
     
     def fingerprint_devices(self, devices: List[Dict[str, Any]], force_scan: bool = False) -> None:
         """Perform fingerprinting on a list of devices.
@@ -168,14 +199,23 @@ class FingerprintingManager:
         # Filter devices that need fingerprinting
         devices_to_fingerprint = []
         for device in devices:
-            if force_scan or self.should_fingerprint_device(device, force_scan):
+            mac_address = device.get('mac_address', '')
+            ip_address = device.get('ip_address', '')
+            
+            if force_scan:
+                self.logger.debug(f"Force scan enabled, fingerprinting device: {mac_address} ({ip_address})")
                 devices_to_fingerprint.append(device)
+            elif self.should_fingerprint_device(device, force_scan):
+                self.logger.debug(f"Device needs fingerprinting: {mac_address} ({ip_address})")
+                devices_to_fingerprint.append(device)
+            else:
+                self.logger.debug(f"Skipping already fingerprinted device: {mac_address} ({ip_address})")
         
         if not devices_to_fingerprint:
             self.logger.info("No devices to fingerprint after validation")
             return
             
-        self.logger.info(f"Starting device fingerprinting for {len(devices_to_fingerprint)} devices" + 
+        self.logger.info(f"Starting device fingerprinting for {len(devices_to_fingerprint)} devices" +
                          (" (forced)" if force_scan else ""))
         start_time = time.time()
         
@@ -203,6 +243,31 @@ class FingerprintingManager:
         mac_address = result['mac_address']
         ip_address = result['ip_address']
         
+        # Check if device is already fingerprinted (unless force_scan is True)
+        if not force_scan:
+            db_device = self.db_manager.get_device(mac_address)
+            if db_device:
+                # Check if device is already properly fingerprinted
+                existing_type = db_device.get("device_type", "")
+                fingerprint_date = db_device.get("fingerprint_date", 0)
+                fingerprint_confidence = db_device.get("fingerprint_confidence", 0)
+                
+                unknown_types = ["", "unknown", "unidentified", None]
+                has_valid_type = existing_type not in unknown_types
+                has_valid_date = fingerprint_date is not None and fingerprint_date > 0
+                
+                threshold = float(self.config.get("fingerprinting", "confidence_threshold", 0.5))
+                has_high_confidence = fingerprint_confidence is not None and fingerprint_confidence >= threshold
+                
+                already_fingerprinted = has_valid_type and has_valid_date and has_high_confidence
+                
+                if already_fingerprinted:
+                    self.logger.debug(
+                        f"Device {mac_address} already fingerprinted in database: type={existing_type}, "
+                        f"confidence={fingerprint_confidence}, date={fingerprint_date}, skipping update"
+                    )
+                    return
+        
         # Extract best match if available
         identification = result.get('identification', [])
         if not identification:
@@ -228,10 +293,12 @@ class FingerprintingManager:
             'device_model': model,
             'device_manufacturer': manufacturer,
             'fingerprint_confidence': confidence,
-            'fingerprint_date': int(time.time())
+            'fingerprint_date': int(time.time()),
+            'is_fingerprinted': True  # Mark the device as fingerprinted to prevent automatic re-fingerprinting
         }
         
         # Update device in database
+        self.logger.debug(f"Updating device {mac_address} with fingerprinting data: {device_info}")
         self.db_manager.update_device_metadata(mac_address, device_info)
         
         # Get current device info from database
@@ -243,10 +310,10 @@ class FingerprintingManager:
         
         # Log event for fingerprinting
         event_type = self.db_manager.EVENT_DEVICE_FINGERPRINTED
-        event_message = f"Device fingerprinted{' (forced)' if force_scan else ''}: {device_name} ({ip_address})"
+        event_message = f"Device identified: {device_name} ({ip_address})"
         
         self.logger.info(
-            f"Device fingerprinted{' (forced scan)' if force_scan else ''}: {device_name} ({ip_address}) "
+            f"Device identified from nmap vendor: {device_name} ({ip_address}) "
             f"as {device_type} with {confidence:.2f} confidence"
         )
         
@@ -257,8 +324,8 @@ class FingerprintingManager:
             "info",
             event_message,
             json.dumps({
-                'mac': mac_address, 
-                'ip': ip_address, 
+                'mac': mac_address,
+                'ip': ip_address,
                 'hostname': hostname,
                 'manufacturer': manufacturer,
                 'model': model,
