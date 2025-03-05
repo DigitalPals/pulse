@@ -50,6 +50,13 @@ class Config:
                 "interval": 86400,  # seconds
             },
         },
+        "fingerprinting": {
+            "enabled": False,
+            "confidence_threshold": 0.5,
+            "max_threads": 10,
+            "timeout": 2,
+            "scan_interval": 86400,  # Default to daily scanning (in seconds)
+        },
         "web_interface": {
             "enabled": True,
             "host": "0.0.0.0",

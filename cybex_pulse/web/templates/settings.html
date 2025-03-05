@@ -325,6 +325,17 @@
                                     Timeout for network operations during fingerprinting (1-10 seconds).
                                 </small>
                             </div>
+                            
+                            <div class="form-group">
+                                <label for="fingerprinting_scan_interval">Scan Interval</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="fingerprinting_scan_interval" name="fingerprinting_scan_interval" class="form-control" value="{{ config.fingerprinting.scan_interval|default(86400) }}" min="3600">
+                                    <span class="unit">seconds</span>
+                                </div>
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle"></i> How often to re-fingerprint devices (in seconds). Default is 86400 (1 day).
+                                </small>
+                            </div>
                         </div>
                         
                         <div class="alert alert-info fingerprinting-note">

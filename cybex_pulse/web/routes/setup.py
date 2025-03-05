@@ -67,7 +67,8 @@ def register_setup_routes(app, server):
                 "enabled": False,
                 "confidence_threshold": 0.5,
                 "max_threads": 10,
-                "timeout": 2
+                "timeout": 2,
+                "scan_interval": 86400  # Default to daily scanning (in seconds)
             }
         
         return server.render_template('setup_wizard.html',
@@ -165,7 +166,8 @@ def register_setup_routes(app, server):
                 'enabled': False,
                 'confidence_threshold': 0.5,
                 'max_threads': 10,
-                'timeout': 2
+                'timeout': 2,
+                'scan_interval': 86400  # Default to daily scanning (in seconds)
             }
             
         return server.render_template('settings.html',
@@ -290,6 +292,11 @@ def process_setup_step(server, step: int) -> None:
             fingerprinting_timeout = form.get('fingerprinting_timeout')
             if fingerprinting_timeout and fingerprinting_timeout.isdigit() and 1 <= int(fingerprinting_timeout) <= 10:
                 server.config.set("fingerprinting", "timeout", int(fingerprinting_timeout))
+                
+            # Scan interval
+            fingerprinting_scan_interval = form.get('fingerprinting_scan_interval')
+            if fingerprinting_scan_interval and fingerprinting_scan_interval.isdigit() and int(fingerprinting_scan_interval) >= 3600:
+                server.config.set("fingerprinting", "scan_interval", int(fingerprinting_scan_interval))
     
     # Step 5: Additional Features Configuration
     elif step == 5:
@@ -396,6 +403,14 @@ def update_settings_from_form(server, form: Dict[str, str]) -> None:
         if int(fingerprinting_timeout) != original_timeout:
             fingerprinting_settings_changed = True
         server.config.set("fingerprinting", "timeout", int(fingerprinting_timeout))
+    
+    # Scan interval
+    fingerprinting_scan_interval = form.get('fingerprinting_scan_interval')
+    if fingerprinting_scan_interval and fingerprinting_scan_interval.isdigit() and int(fingerprinting_scan_interval) >= 3600:
+        original_scan_interval = server.config.get("fingerprinting", "scan_interval", default=86400)
+        if int(fingerprinting_scan_interval) != original_scan_interval:
+            fingerprinting_settings_changed = True
+        server.config.set("fingerprinting", "scan_interval", int(fingerprinting_scan_interval))
     
     # Telegram settings
     telegram_enabled = form.get('telegram_enabled') == 'on'

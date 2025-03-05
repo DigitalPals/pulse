@@ -52,9 +52,10 @@ class FingerprintingManager:
                 # Get configuration values with proper defaults
                 max_threads = int(self.config.get("fingerprinting", "max_threads", 10))
                 timeout = int(self.config.get("fingerprinting", "timeout", 2))
+                scan_interval = int(self.config.get("fingerprinting", "scan_interval", 86400))
                 
                 # Initialize fingerprinter
-                self.logger.info(f"Creating DeviceFingerprinter with max_threads={max_threads}, timeout={timeout}")
+                self.logger.info(f"Creating DeviceFingerprinter with max_threads={max_threads}, timeout={timeout}, scan_interval={scan_interval}")
                 self.fingerprinter = DeviceFingerprinter(
                     max_threads=max_threads,
                     timeout=timeout,
@@ -144,7 +145,17 @@ class FingerprintingManager:
         # Check if device is already marked as fingerprinted
         # This is the primary check that prevents automatic re-fingerprinting
         if db_device.get("is_fingerprinted"):
-            self.logger.debug(f"Device {mac_address} is already marked as fingerprinted, skipping automatic fingerprinting")
+            # Check if enough time has passed since the last fingerprinting
+            fingerprint_date = db_device.get("fingerprint_date", 0)
+            current_time = int(time.time())
+            scan_interval = int(self.config.get("fingerprinting", "scan_interval", 86400))
+            
+            # If the scan interval has passed, allow re-fingerprinting
+            if current_time - fingerprint_date > scan_interval:
+                self.logger.debug(f"Device {mac_address} scan interval ({scan_interval}s) has passed, will re-fingerprint")
+                return True
+                
+            self.logger.debug(f"Device {mac_address} is already marked as fingerprinted and scan interval has not passed, skipping automatic fingerprinting")
             return False
             
         # If not explicitly marked as fingerprinted, check if it meets the criteria
