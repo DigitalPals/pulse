@@ -1,0 +1,20 @@
+services:
+  cybex-pulse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cybex-pulse
+    restart: unless-stopped
+    privileged: true  # Required for network scanning capabilities
+    network_mode: host  # Required to properly monitor the host network
+    volumes:
+      - pulse-logs:/var/log/cybex_pulse
+      - pulse-data:/var/lib/cybex_pulse
+    environment:
+      - TZ=UTC  # Set your timezone here
+
+volumes:
+  pulse-logs:
+    driver: local
+  pulse-data:
+    driver: local
